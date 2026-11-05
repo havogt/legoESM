@@ -2099,7 +2099,7 @@ wheels = [
 [[package]]
 name = "icon4py-atmosphere-diffusion"
 version = "0.5.0"
-source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fatmosphere%2Fdiffusion&rev=a79d67cddc6888951b469bef7f8a91cd979dab46#a79d67cddc6888951b469bef7f8a91cd979dab46" }
+source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fatmosphere%2Fdiffusion&rev=fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00#fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00" }
 dependencies = [
     { name = "gt4py" },
     { name = "icon4py-common" },
@@ -2109,7 +2109,7 @@ dependencies = [
 [[package]]
 name = "icon4py-atmosphere-dycore"
 version = "0.5.0"
-source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fatmosphere%2Fdycore&rev=a79d67cddc6888951b469bef7f8a91cd979dab46#a79d67cddc6888951b469bef7f8a91cd979dab46" }
+source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fatmosphere%2Fdycore&rev=fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00#fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00" }
 dependencies = [
     { name = "gt4py" },
     { name = "icon4py-common" },
@@ -2119,7 +2119,7 @@ dependencies = [
 [[package]]
 name = "icon4py-atmosphere-microphysics"
 version = "0.5.0"
-source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fatmosphere%2Fsubgrid_scale_physics%2Fmicrophysics&rev=a79d67cddc6888951b469bef7f8a91cd979dab46#a79d67cddc6888951b469bef7f8a91cd979dab46" }
+source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fatmosphere%2Fsubgrid_scale_physics%2Fmicrophysics&rev=fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00#fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00" }
 dependencies = [
     { name = "gt4py" },
     { name = "icon4py-common" },
@@ -2129,7 +2129,7 @@ dependencies = [
 [[package]]
 name = "icon4py-atmosphere-muphys"
 version = "0.5.0"
-source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fatmosphere%2Fsubgrid_scale_physics%2Fmuphys&rev=a79d67cddc6888951b469bef7f8a91cd979dab46#a79d67cddc6888951b469bef7f8a91cd979dab46" }
+source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fatmosphere%2Fsubgrid_scale_physics%2Fmuphys&rev=fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00#fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00" }
 dependencies = [
     { name = "gt4py" },
     { name = "icon4py-common", extra = ["io"] },
@@ -2139,7 +2139,7 @@ dependencies = [
 [[package]]
 name = "icon4py-atmosphere-physics-driver"
 version = "0.5.0"
-source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fatmosphere%2Fsubgrid_scale_physics%2Fphysics_driver&rev=a79d67cddc6888951b469bef7f8a91cd979dab46#a79d67cddc6888951b469bef7f8a91cd979dab46" }
+source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fatmosphere%2Fsubgrid_scale_physics%2Fphysics_driver&rev=fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00#fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00" }
 dependencies = [
     { name = "gt4py" },
     { name = "icon4py-common" },
@@ -2149,7 +2149,7 @@ dependencies = [
 [[package]]
 name = "icon4py-atmosphere-surface"
 version = "0.5.0"
-source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fatmosphere%2Fsubgrid_scale_physics%2Fsurface&rev=a79d67cddc6888951b469bef7f8a91cd979dab46#a79d67cddc6888951b469bef7f8a91cd979dab46" }
+source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fatmosphere%2Fsubgrid_scale_physics%2Fsurface&rev=fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00#fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00" }
 dependencies = [
     { name = "gt4py" },
     { name = "icon4py-common" },
@@ -2159,7 +2159,7 @@ dependencies = [
 [[package]]
 name = "icon4py-atmosphere-tmx"
 version = "0.5.0"
-source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fatmosphere%2Fsubgrid_scale_physics%2Ftmx&rev=a79d67cddc6888951b469bef7f8a91cd979dab46#a79d67cddc6888951b469bef7f8a91cd979dab46" }
+source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fatmosphere%2Fsubgrid_scale_physics%2Ftmx&rev=fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00#fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00" }
 dependencies = [
     { name = "gt4py" },
     { name = "icon4py-common" },
@@ -2169,7 +2169,7 @@ dependencies = [
 [[package]]
 name = "icon4py-atmosphere-tracer-advection"
 version = "0.5.0"
-source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fatmosphere%2Ftracer_advection&rev=a79d67cddc6888951b469bef7f8a91cd979dab46#a79d67cddc6888951b469bef7f8a91cd979dab46" }
+source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fatmosphere%2Ftracer_advection&rev=fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00#fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00" }
 dependencies = [
     { name = "gt4py" },
     { name = "icon4py-common" },
@@ -2179,7 +2179,7 @@ dependencies = [
 [[package]]
 name = "icon4py-common"
 version = "0.5.0"
-source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fcommon&rev=a79d67cddc6888951b469bef7f8a91cd979dab46#a79d67cddc6888951b469bef7f8a91cd979dab46" }
+source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fcommon&rev=fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00#fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00" }
 dependencies = [
     { name = "array-api-compat" },
     { name = "cattrs" },
@@ -2218,7 +2218,7 @@ jax-cuda13 = [
 [[package]]
 name = "icon4py-driver"
 version = "0.5.0"
-source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fdriver&rev=a79d67cddc6888951b469bef7f8a91cd979dab46#a79d67cddc6888951b469bef7f8a91cd979dab46" }
+source = { git = "https://github.com/havogt/icon4py?subdirectory=model%2Fdriver&rev=fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00#fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00" }
 dependencies = [
     { name = "devtools" },
     { name = "gt4py" },
@@ -2841,9 +2841,9 @@ requires-dist = [
     { name = "gcsfs", marker = "extra == 'data'", specifier = ">=2024.2" },
     { name = "gcsfs", marker = "extra == 'ml'", specifier = ">=2024.2" },
     { name = "hatchling", marker = "extra == 'dev'" },
-    { name = "icon4py-common", extras = ["distributed"], marker = "python_full_version >= '3.12' and extra == 'icon-mpi'", git = "https://github.com/havogt/icon4py?subdirectory=model%2Fcommon&rev=a79d67cddc6888951b469bef7f8a91cd979dab46" },
-    { name = "icon4py-common", extras = ["jax-cuda13"], marker = "python_full_version >= '3.12' and extra == 'icon'", git = "https://github.com/havogt/icon4py?subdirectory=model%2Fcommon&rev=a79d67cddc6888951b469bef7f8a91cd979dab46" },
-    { name = "icon4py-driver", marker = "python_full_version >= '3.12' and extra == 'icon'", git = "https://github.com/havogt/icon4py?subdirectory=model%2Fdriver&rev=a79d67cddc6888951b469bef7f8a91cd979dab46" },
+    { name = "icon4py-common", extras = ["distributed"], marker = "python_full_version >= '3.12' and extra == 'icon-mpi'", git = "https://github.com/havogt/icon4py?subdirectory=model%2Fcommon&rev=fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00" },
+    { name = "icon4py-common", extras = ["jax-cuda13"], marker = "python_full_version >= '3.12' and extra == 'icon'", git = "https://github.com/havogt/icon4py?subdirectory=model%2Fcommon&rev=fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00" },
+    { name = "icon4py-driver", marker = "python_full_version >= '3.12' and extra == 'icon'", git = "https://github.com/havogt/icon4py?subdirectory=model%2Fdriver&rev=fa6a44f1b05b6d040ec2b1bc63acc67b0dd6eb00" },
     { name = "imageio", marker = "extra == 'ml'", specifier = ">=2.30" },
     { name = "import-linter", marker = "extra == 'dev'", specifier = ">=2.0" },
     { name = "jax", specifier = ">=0.5.3" },
