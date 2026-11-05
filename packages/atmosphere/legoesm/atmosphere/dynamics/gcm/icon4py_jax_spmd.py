@@ -76,6 +76,9 @@ def run(args: argparse.Namespace) -> None:
             finite_halo_padding=True,
         )
         global_index = dycore.owned_global_index
+        if args.diagnostics_every:
+            _diagnosed_run(dycore, process_props, args, out)
+            return
         for _ in range(args.steps):
             dycore.step()
             steps.append(dycore.prognostics())
@@ -137,6 +140,69 @@ def run(args: argparse.Namespace) -> None:
         **{f"{name}_{k}": fields[name] for k, fields in enumerate(steps) for name in fields},
     )
     print(f"rank {rank}: wrote {out / f'rank{rank}.npz'} ({args.steps} steps)", flush=True)
+
+
+def _dry_mass(dycore, prognostics: dict[str, np.ndarray]) -> float:
+    """Total density mass Σ rho·cell_area·ddqz_z_full over owned cells, as icon4py's statistics."""
+    from icon4py.model.common.grid import geometry_attributes
+    from icon4py.model.common.metrics import metrics_attributes
+
+    factories = dycore.driver.static_field_factories
+    rho = prognostics["rho"]
+    area = np.asarray(factories.geometry.get(geometry_attributes.CELL_AREA).asnumpy())
+    dz = np.asarray(factories.metrics.get(metrics_attributes.DDQZ_Z_FULL).asnumpy())
+    n = rho.shape[0]
+    return float(np.sum(rho * area[:n, np.newaxis] * dz[:n]))
+
+
+def _diagnosed_run(dycore, process_props, args: argparse.Namespace, out: pathlib.Path) -> None:
+    """Step and sample every N steps: finiteness, max |vn|, total mass; time unsampled steps."""
+    import json
+    import time
+
+    def global_reduce(value: float, op: str) -> float:
+        if process_props.is_single_rank():
+            return value
+        from mpi4py import MPI
+
+        return process_props.comm.allreduce(value, op={"sum": MPI.SUM, "max": MPI.MAX}[op])
+
+    def sample(step: int) -> dict:
+        fields = dycore.prognostics()
+        finite = all(bool(np.isfinite(v).all()) for v in fields.values())
+        return {
+            "step": step,
+            "finite": bool(global_reduce(float(not finite), "sum") == 0.0),
+            "max_abs_vn": global_reduce(float(np.max(np.abs(fields["vn"]))), "max"),
+            "mass": global_reduce(_dry_mass(dycore, fields), "sum"),
+        }
+
+    samples = [sample(0)]
+    step_seconds = []
+    for k in range(1, args.steps + 1):
+        start = time.perf_counter()
+        dycore.step()
+        elapsed = time.perf_counter() - start
+        if k > 2:
+            step_seconds.append(elapsed)
+        if k % args.diagnostics_every == 0 or k == args.steps:
+            samples.append(sample(k))
+    if process_props.rank == 0:
+        mass0 = samples[0]["mass"]
+        summary = {
+            "ranks": process_props.comm_size,
+            "steps": args.steps,
+            "all_finite": all(s["finite"] for s in samples),
+            "max_abs_vn_over_time": max(s["max_abs_vn"] for s in samples),
+            "relative_mass_drift_final": (samples[-1]["mass"] - mass0) / mass0,
+            "max_abs_relative_mass_drift": max(abs(s["mass"] - mass0) / mass0 for s in samples),
+            "step_seconds_median": float(np.median(step_seconds)),
+            "step_seconds_mean": float(np.mean(step_seconds)),
+            "timed_steps": len(step_seconds),
+            "samples": samples,
+        }
+        (out / "summary.json").write_text(json.dumps(summary, indent=1))
+        print(json.dumps({k: v for k, v in summary.items() if k != "samples"}), flush=True)
 
 
 def assemble(run_dir: pathlib.Path, steps: int) -> list[dict[str, np.ndarray]]:
@@ -220,6 +286,9 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--steps", type=int, required=True)
     r.add_argument("--out", required=True)
     r.add_argument("--mpi", action="store_true", help="decompose over the MPI ranks")
+    r.add_argument(
+        "--diagnostics-every", type=int, help="adapter only: sample every N steps, no npz output"
+    )
     c = sub.add_parser("compare")
     c.add_argument("--out", required=True)
     c.add_argument("--experiment", required=True)
