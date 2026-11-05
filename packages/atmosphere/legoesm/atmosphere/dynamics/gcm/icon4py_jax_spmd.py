@@ -16,14 +16,32 @@ import pathlib
 import numpy as np
 
 PROGNOSTIC_FIELDS = ("vn", "w", "rho", "exner", "theta_v")
+TRACERS = ("qv", "qc", "qi", "qr", "qs", "qg")
 
-# icon4py's JW double-precision tolerances (atol, rtol), model/driver/tests/.../test_driver.py
+# icon4py's double-precision tolerances (atol, rtol), model/driver/tests/.../test_driver.py
 JW_SAVEPOINT_TOLERANCES = {
     "vn": (5.3e-7, 0.0),
     "w": (8e-9, 0.0),
     "exner": (4.5e-11, 5.5e-11),
     "theta_v": (5.5e-8, 1.3e-10),
     "rho": (1.5e-10, 2.2e-10),
+}
+APE_AES_SAVEPOINT_TOLERANCES = {
+    "vn": (6e-7, 0.0),
+    "w": (1e-8, 0.0),
+    "rho": (9e-10, 0.0),
+    "exner": (1e-8, 0.0),
+    "theta_v": (0.0, 3e-8),
+    "qv": (1e-8, 0.0),
+    "qc": (1e-10, 0.0),
+    "qr": (1e-10, 0.0),
+    "qs": (1e-10, 0.0),
+    "qi": (1e-10, 0.0),
+    "qg": (1e-10, 0.0),
+}
+SAVEPOINT_TOLERANCES = {
+    "exclaim_nh35_tri_jws_sb": JW_SAVEPOINT_TOLERANCES,
+    "exclaim_ape_aesPhys_sb": APE_AES_SAVEPOINT_TOLERANCES,
 }
 
 
@@ -35,10 +53,17 @@ def savepoint_fields(experiment: pathlib.Path, date: str) -> dict[str, np.ndarra
         serialbox.OpenModeKind.Read, str(experiment / "ser_data"), "icon_pydycore_rank0"
     )
     savepoint = serializer.savepoint["time-step-exit"].id[1].date[date].as_savepoint()
-    return {
+    fields = {
         name: np.squeeze(serializer.read(name, savepoint).astype(np.float64))
         for name in PROGNOSTIC_FIELDS
     }
+    if "tracers" in serializer.fields_at_savepoint(savepoint):
+        from icon4py.model.common.states import data
+
+        tracers = np.squeeze(serializer.read("tracers", savepoint).astype(np.float64))
+        for name in TRACERS:
+            fields[name] = tracers[:, :, getattr(data, name.upper())]
+    return fields
 
 
 def _process_props(mpi: bool):
@@ -104,7 +129,7 @@ def run(args: argparse.Namespace) -> None:
             vertical_grid_config=config.vertical_grid,
             allocator=model_backends.get_allocator(None),
             process_props=process_props,
-            extra_halo_rings=driver_utils.JAX_EXTRA_HALO_RINGS if multi_rank else 0,
+            extra_halo_rings=driver_utils.jax_extra_halo_rings(config) if multi_rank else 0,
         )
         owned = decomposition.DecompositionInfo.EntryType.OWNED
         info = grid_manager.decomposition_info
@@ -122,7 +147,7 @@ def run(args: argparse.Namespace) -> None:
                 }
             )
 
-        driver.run_driver(
+        ds, _ = driver.run_driver(
             config=config,
             grid_manager=grid_manager,
             process_props=process_props,
@@ -132,6 +157,14 @@ def run(args: argparse.Namespace) -> None:
             jax_exchange_read_fields_only=multi_rank,
             jax_spmd=multi_rank,
             on_step_end=record,
+        )
+        # run_driver's per-step hook sees no tracers: they are compared after the last step
+        num_owned_cells = global_index[dims.CellDim].size
+        steps[-1].update(
+            {
+                tracer.name: tracer.field.asnumpy()[:num_owned_cells]
+                for tracer in ds.tracers.current.active_fields()
+            }
         )
 
     assert len(steps) == args.steps
@@ -157,6 +190,14 @@ def _dry_mass(dycore, prognostics: dict[str, np.ndarray]) -> float:
     return float(np.sum(rho * area[:n, np.newaxis] * dz[:n]))
 
 
+def _water_mass(dycore, prognostics: dict[str, np.ndarray]) -> float:
+    """Total water Σ (qv+qc+qi+qr+qs+qg)·rho·cell_area·ddqz_z_full over owned cells."""
+    q = sum(prognostics[name] for name in TRACERS if name in prognostics)
+    if isinstance(q, int):
+        return 0.0
+    return _dry_mass(dycore, {"rho": prognostics["rho"] * q})
+
+
 def _diagnosed_run(dycore, process_props, args: argparse.Namespace, out: pathlib.Path) -> None:
     """Step and sample every N steps: finiteness, max |vn|, total mass; time unsampled steps."""
     import json
@@ -177,6 +218,7 @@ def _diagnosed_run(dycore, process_props, args: argparse.Namespace, out: pathlib
             "finite": bool(global_reduce(float(not finite), "sum") == 0.0),
             "max_abs_vn": global_reduce(float(np.max(np.abs(fields["vn"]))), "max"),
             "mass": global_reduce(_dry_mass(dycore, fields), "sum"),
+            "water": global_reduce(_water_mass(dycore, fields), "sum"),
         }
 
     samples = [sample(0)]
@@ -198,6 +240,8 @@ def _diagnosed_run(dycore, process_props, args: argparse.Namespace, out: pathlib
             "max_abs_vn_over_time": max(s["max_abs_vn"] for s in samples),
             "relative_mass_drift_final": (samples[-1]["mass"] - mass0) / mass0,
             "max_abs_relative_mass_drift": max(abs(s["mass"] - mass0) / mass0 for s in samples),
+            "water_initial": samples[0]["water"],
+            "water_final": samples[-1]["water"],
             "step_seconds_median": float(np.median(step_seconds)),
             "step_seconds_mean": float(np.mean(step_seconds)),
             "timed_steps": len(step_seconds),
@@ -219,10 +263,19 @@ def assemble(run_dir: pathlib.Path, steps: int) -> list[dict[str, np.ndarray]]:
             name: np.concatenate([r[f"{name}_{k}"] for r in ranks])[
                 np.argsort(gid["gid_edge" if name == "vn" else "gid_cell"])
             ]
-            for name in PROGNOSTIC_FIELDS
+            for name in (*PROGNOSTIC_FIELDS, *TRACERS)
+            if f"{name}_{k}" in ranks[0]
         }
         for k in range(steps)
     ]
+
+
+def experiment_name(experiment: pathlib.Path) -> str:
+    from icon4py.model.driver import config as driver_config
+
+    return driver_config.read_experiment_config_from_yaml(
+        experiment / "config.yml"
+    ).driver.experiment_name
 
 
 def step_dates(experiment: pathlib.Path, steps: int) -> list[str]:
@@ -244,16 +297,19 @@ def compare(args: argparse.Namespace) -> int:
         different = [
             f"{first} != {label}: step {k} {name}"
             for k in range(args.steps)
-            for name in PROGNOSTIC_FIELDS
+            for name in runs[first][k].keys() & runs[label][k].keys()
             if not np.array_equal(runs[first][k][name], runs[label][k][name])
         ]
         failures += different
         print(f"bitwise {first} vs {label}: {'DIFFERENT' if different else 'equal'}")
+    tolerances = SAVEPOINT_TOLERANCES[experiment_name(experiment)]
     for label in args.labels:
         for k, date in enumerate(step_dates(experiment, args.steps)):
             reference = savepoint_fields(experiment, date)
             errors = []
-            for name, (atol, rtol) in JW_SAVEPOINT_TOLERANCES.items():
+            for name, (atol, rtol) in tolerances.items():
+                if name not in runs[label][k]:
+                    continue
                 ours = runs[label][k][name]
                 theirs = reference[name][: ours.shape[0]]
                 assert theirs.shape == ours.shape, (label, name, theirs.shape, ours.shape)
@@ -268,7 +324,8 @@ def compare(args: argparse.Namespace) -> int:
                 f"max |{other} - {label}| last step: "
                 + " ".join(
                     f"{n}={np.max(np.abs(runs[other][-1][n] - ref[-1][n])):.2e}"
-                    for n in PROGNOSTIC_FIELDS
+                    for n in runs[other][-1]
+                    if n in ref[-1]
                 )
             )
     for failure in failures:

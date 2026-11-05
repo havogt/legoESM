@@ -50,7 +50,7 @@ class Icon4pyJaxDycore:
             vertical_grid_config=config.vertical_grid,
             allocator=allocator,
             process_props=process_props,
-            extra_halo_rings=driver_utils.JAX_EXTRA_HALO_RINGS if multi_rank else 0,
+            extra_halo_rings=driver_utils.jax_extra_halo_rings(config) if multi_rank else 0,
         )
         info = grid_manager.decomposition_info
         owned = decomposition.DecompositionInfo.EntryType.OWNED
@@ -136,13 +136,13 @@ class Icon4pyJaxDycore:
         return prognostic_state.PrognosticState(**self._prognostic)
 
     def prognostics(self) -> dict[str, np.ndarray]:
-        """This rank's owned points of the prognostic fields, in local order."""
+        """This rank's owned points of the prognostic fields and tracers, in local order."""
         from icon4py.model.common import dimension as dims
 
-        local = self.driver._local(self._prognostic)
+        local = self.driver._local({**self._prognostic, **self._tracers})
         return {
             name: np.asarray(local[name].asnumpy())[
                 : self.owned_global_index[self._field_dim.get(name, dims.CellDim)].size
             ]
-            for name in PROGNOSTIC_FIELDS
+            for name in (*PROGNOSTIC_FIELDS, *self._tracers)
         }
