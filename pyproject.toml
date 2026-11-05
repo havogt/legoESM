@@ -122,6 +122,7 @@ icon = [
     "icon4py-driver; python_version >= '3.12'",
     "icon4py-common[jax-cuda13]; python_version >= '3.12'",
 ]
+icon-mpi = ["icon4py-common[distributed]; python_version >= '3.12'"]
 all = [
     "legoesm[ml,mesh,viz,data,dev,docs,wizard]",
 ]

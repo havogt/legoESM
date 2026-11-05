@@ -1662,6 +1662,16 @@ wheels = [
 ]
 
 [[package]]
+name = "ghex"
+version = "0.9.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mpi4py" },
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a3/bc/773f20762d7d269e6b56d7fd8c39f522e48be875cc2e52b87bc2e9bfc806/ghex-0.9.0.tar.gz", hash = "sha256:165115747171c2b16367dace0420d8d50ddc925a1ad9b037c6669ffa70e7a596", size = 8932624, upload-time = "2026-08-06T15:29:30.433Z" }
+
+[[package]]
 name = "google-api-core"
 version = "2.30.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2182,6 +2192,10 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+distributed = [
+    { name = "ghex" },
+    { name = "mpi4py" },
+]
 io = [
     { name = "cartopy" },
     { name = "cftime" },
@@ -2783,6 +2797,9 @@ icon = [
     { name = "icon4py-common", extra = ["jax-cuda13"], marker = "python_full_version >= '3.12'" },
     { name = "icon4py-driver", marker = "python_full_version >= '3.12'" },
 ]
+icon-mpi = [
+    { name = "icon4py-common", extra = ["distributed"], marker = "python_full_version >= '3.12'" },
+]
 mesh = [
     { name = "pymetis" },
     { name = "scipy" },
@@ -2824,6 +2841,7 @@ requires-dist = [
     { name = "gcsfs", marker = "extra == 'data'", specifier = ">=2024.2" },
     { name = "gcsfs", marker = "extra == 'ml'", specifier = ">=2024.2" },
     { name = "hatchling", marker = "extra == 'dev'" },
+    { name = "icon4py-common", extras = ["distributed"], marker = "python_full_version >= '3.12' and extra == 'icon-mpi'", git = "https://github.com/havogt/icon4py?subdirectory=model%2Fcommon&rev=a79d67cddc6888951b469bef7f8a91cd979dab46" },
     { name = "icon4py-common", extras = ["jax-cuda13"], marker = "python_full_version >= '3.12' and extra == 'icon'", git = "https://github.com/havogt/icon4py?subdirectory=model%2Fcommon&rev=a79d67cddc6888951b469bef7f8a91cd979dab46" },
     { name = "icon4py-driver", marker = "python_full_version >= '3.12' and extra == 'icon'", git = "https://github.com/havogt/icon4py?subdirectory=model%2Fdriver&rev=a79d67cddc6888951b469bef7f8a91cd979dab46" },
     { name = "imageio", marker = "extra == 'ml'", specifier = ">=2.30" },
@@ -2865,7 +2883,7 @@ requires-dist = [
     { name = "xarray", specifier = ">=2024.0" },
     { name = "zarr", specifier = ">=2.18" },
 ]
-provides-extras = ["canopy", "ml", "mesh", "viz", "data", "mps", "wizard", "mpi", "dev", "docs", "icon", "all"]
+provides-extras = ["canopy", "ml", "mesh", "viz", "data", "mps", "wizard", "mpi", "dev", "docs", "icon", "icon-mpi", "all"]
 
 [[package]]
 name = "legoesm-atmosphere"

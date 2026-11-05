@@ -13,7 +13,7 @@ pytest.importorskip("icon4py.model.driver.jax_driver")
 if "ICON4PY_TEST_DATA_PATH" not in os.environ:
     pytest.skip("ICON4PY_TEST_DATA_PATH is not set", allow_module_level=True)
 
-from legoesm.atmosphere.dynamics.gcm import icon4py_jax  # noqa: E402
+from legoesm.atmosphere.dynamics.gcm import icon4py_jax, icon4py_jax_spmd  # noqa: E402
 
 pytestmark = pytest.mark.slow
 
@@ -22,14 +22,7 @@ EXPERIMENT = DATA / "ser_icondata" / "mpitask1_exclaim_nh35_tri_jws_v12"
 GRID_FILE = DATA / "grids" / "icon_grid_0013_R02B04_R" / "icon_grid_0013_R02B04_R.nc"
 STEP_DATES = ("2008-09-01T00:05:00.000", "2008-09-01T00:10:00.000", "2008-09-01T00:15:00.000")
 
-# icon4py's JW double-precision tolerances (atol, rtol), model/driver/tests/.../test_driver.py
-SAVEPOINT_TOLERANCES = {
-    "vn": (5.3e-7, 0.0),
-    "w": (8e-9, 0.0),
-    "exner": (4.5e-11, 5.5e-11),
-    "theta_v": (5.5e-8, 1.3e-10),
-    "rho": (1.5e-10, 2.2e-10),
-}
+SAVEPOINT_TOLERANCES = icon4py_jax_spmd.JW_SAVEPOINT_TOLERANCES
 
 _REFERENCE = textwrap.dedent(
     """
@@ -66,16 +59,7 @@ _REFERENCE = textwrap.dedent(
 
 
 def _savepoint_fields(date: str) -> dict[str, np.ndarray]:
-    import serialbox
-
-    serializer = serialbox.Serializer(
-        serialbox.OpenModeKind.Read, str(EXPERIMENT / "ser_data"), "icon_pydycore_rank0"
-    )
-    savepoint = serializer.savepoint["time-step-exit"].id[1].date[date].as_savepoint()
-    return {
-        name: np.squeeze(serializer.read(name, savepoint).astype(np.float64))
-        for name in icon4py_jax.PROGNOSTIC_FIELDS
-    }
+    return icon4py_jax_spmd.savepoint_fields(EXPERIMENT, date)
 
 
 @pytest.fixture(scope="module")
