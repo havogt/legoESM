@@ -1,10 +1,12 @@
 """icon4py's JAX non-hydrostatic model, stepped from legoESM.
 
-On one rank without physics, with the whole time step jitted, a step is icon4py's pure
-``jax_api.time_step`` on ``(IconStatic, IconState)``. Otherwise (several ranks, ICON physics,
-or per-substep jit) ``step`` is the body of ``icon4py.model.driver.jax_driver.JaxIcon4pyDriver``'s
-time loop, on one rank or as icon4py's SPMD program over all ranks. Both come from the
-optional ``icon`` extra.
+On one rank with the whole time step jitted, a step goes through icon4py's pure-step API on
+``(IconStatic, IconState)``: ``jax_api.time_step`` without physics, or, with all of muphys,
+surface and tmx configured, ``dynamics_step`` followed by the physics per process group
+(``per_group_time_step``, ICON's order, the surface fluxes from one replaceable call).
+Otherwise (several ranks, part of the physics, or per-substep jit) ``step`` is the body of
+``icon4py.model.driver.jax_driver.JaxIcon4pyDriver``'s time loop, on one rank or as icon4py's
+SPMD program over all ranks. Both come from the optional ``icon`` extra.
 
 KNOWN DIFFERENCE on the ``jax_api`` path: the number of dynamical substeps is fixed by the
 experiment. The driver path raises it once the step's maximum vertical CFL exceeds
@@ -20,6 +22,28 @@ import pathlib
 import numpy as np
 
 PROGNOSTIC_FIELDS = ("vn", "w", "rho", "exner", "theta_v")
+
+
+def per_group_time_step(static, state, *, surface):
+    """One time step: dynamics, then muphys, ``surface`` and tmx applied in turn on the columns.
+
+    ``surface(static, surface_input)`` returns the ``SurfaceFluxState`` tmx reads. The virtual
+    temperature is kept at its dyn2phy value, as icon4py's ``physics_step`` does.
+    """
+    from icon4py.model.driver import jax_api
+
+    state = jax_api.dynamics_step(static, state)
+    col = jax_api.dyn2phy(static, state)
+    tend_muphys, _ = jax_api.muphys(static, col)
+    col = jax_api.apply_column_tendencies(
+        col, tend_muphys, static.dtime, recompute_virtual_temperature=False
+    )
+    fluxes = surface(static, jax_api.surface_input(static, col))
+    tend_tmx, _ = jax_api.tmx(static, col, fluxes)
+    col = jax_api.apply_column_tendencies(
+        col, tend_tmx, static.dtime, recompute_virtual_temperature=False
+    )
+    return jax_api.phy2dyn(static, state, col, jax_api.sum_column_tendencies(tend_muphys, tend_tmx))
 
 
 class Icon4pyJaxDycore:
@@ -48,9 +72,9 @@ class Icon4pyJaxDycore:
         if process_props is None:
             process_props = decomposition.SingleNodeProcessProperties()
         multi_rank = not process_props.is_single_rank()
-        physics = config.muphys is not None or config.surface is not None or config.tmx is not None
+        groups = [config.muphys is not None, config.surface is not None, config.tmx is not None]
         self._field_dim = {"vn": dims.EdgeDim}
-        self.uses_jax_api = not multi_rank and not physics and jit_time_step
+        self.uses_jax_api = not multi_rank and jit_time_step and (all(groups) or not any(groups))
         if self.uses_jax_api:
             import jax
             from icon4py.model.driver import jax_api
@@ -58,7 +82,11 @@ class Icon4pyJaxDycore:
             self._api_static, self._api_state = jax_api.init_from_grid_file(
                 pathlib.Path(grid_file), config
             )
-            self._api_step = jax.jit(jax_api.time_step)
+            self._api_step = jax.jit(
+                functools.partial(per_group_time_step, surface=jax_api.surface)
+                if all(groups)
+                else jax_api.time_step
+            )
             self.driver = None
             self.owned_global_index = {
                 dims.CellDim: np.arange(self._api_state.prognostic["rho"].ndarray.shape[0]),
