@@ -112,3 +112,28 @@ def test_against_icon_savepoints(adapter_steps):
             assert theirs.shape == ours.shape, (name, theirs.shape, ours.shape)
             print(f"{date} {name}: max |adapter - savepoint| = {np.max(np.abs(ours - theirs)):.2e}")
             np.testing.assert_allclose(ours, theirs, atol=atol, rtol=rtol, err_msg=f"{date} {name}")
+
+
+def test_cfl_guard_raises_where_the_driver_would_add_substeps(tmp_path):
+    experiment = DATA / "ser_icondata" / "mpitask1_exclaim_gauss3d_v12"
+    grid = DATA / "grids" / "torus_50000mx5000m_res500m" / "torus_50000mx5000m_res500m.nc"
+    if not (experiment / "config.yml").exists() or not grid.exists():
+        pytest.skip("GAUSS3D data is not in ICON4PY_TEST_DATA_PATH")
+    text = (experiment / "config.yml").read_text()
+    edits = {
+        "dtime: 4 seconds": "dtime: 10 seconds",
+        "value: '2001-01-01T00:00:04+00:00'": "value: '2001-01-01T00:02:00+00:00'",
+    }
+    for old, new in edits.items():
+        assert text.count(old) == 1, old
+        text = text.replace(old, new)
+    (tmp_path / "config.yml").write_text(text)
+    dycore = icon4py_jax.Icon4pyJaxDycore(
+        grid_file=grid,
+        experiment_config=tmp_path / "config.yml",
+        output_path=tmp_path / "output",
+    )
+    assert dycore.uses_jax_api
+    with pytest.raises(RuntimeError, match="maximum vertical CFL"):
+        for _ in range(5):
+            dycore.step()

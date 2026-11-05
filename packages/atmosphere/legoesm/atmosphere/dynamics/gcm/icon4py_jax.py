@@ -8,10 +8,10 @@ Otherwise (several ranks, part of the physics, or per-substep jit) ``step`` is t
 ``icon4py.model.driver.jax_driver.JaxIcon4pyDriver``'s time loop, on one rank or as icon4py's
 SPMD program over all ranks. Both come from the optional ``icon`` extra.
 
-KNOWN DIFFERENCE on the ``jax_api`` path: the number of dynamical substeps is fixed by the
-experiment. The driver path raises it once the step's maximum vertical CFL exceeds
-``vertical_cfl_threshold`` (after entering watch mode at 0.81 of it); ``jax_api`` returns no
-CFL, so nothing here notices when that would have happened.
+On the ``jax_api`` path the number of dynamical substeps is fixed by the experiment. Where the
+driver path would add substeps, the step's maximum vertical CFL exceeds
+``vertical_cfl_threshold``, and ``step`` raises instead (checked on the host, after the jitted
+step).
 """
 
 from __future__ import annotations
@@ -82,6 +82,7 @@ class Icon4pyJaxDycore:
             self._api_static, self._api_state = jax_api.init_from_grid_file(
                 pathlib.Path(grid_file), config
             )
+            self._vertical_cfl_threshold = float(config.driver.vertical_cfl_threshold)
             self._api_step = jax.jit(
                 functools.partial(per_group_time_step, surface=jax_api.surface)
                 if all(groups)
@@ -139,6 +140,14 @@ class Icon4pyJaxDycore:
             self._api_state = self._api_step(self._api_static, self._api_state)
             self._api_state.prognostic["vn"].ndarray.block_until_ready()
             self.steps_done += 1
+            cfl = self._api_state.carry["diagnostic"]["max_vertical_cfl"]
+            cfl = float(np.asarray(getattr(cfl, "ndarray", cfl)))
+            if not cfl <= self._vertical_cfl_threshold:
+                raise RuntimeError(
+                    f"step {self.steps_done}: maximum vertical CFL {cfl:.6g} exceeds "
+                    f"vertical_cfl_threshold {self._vertical_cfl_threshold:g}; the driver path "
+                    "would add dynamical substeps, the jax_api path runs a fixed number"
+                )
             return
         d = self.driver
         time_vars = d.model_time_variables
