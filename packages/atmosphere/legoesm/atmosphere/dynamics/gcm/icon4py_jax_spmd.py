@@ -91,6 +91,7 @@ def run(args: argparse.Namespace) -> None:
     out = pathlib.Path(args.out) / args.label
     out.mkdir(parents=True, exist_ok=True)
     multi_rank = not process_props.is_single_rank()
+    spmd = multi_rank and not args.no_spmd
     steps: list[dict[str, np.ndarray]] = []
 
     if args.mode == "adapter":
@@ -99,7 +100,8 @@ def run(args: argparse.Namespace) -> None:
             experiment_config=pathlib.Path(args.experiment) / "config.yml",
             output_path=out / f"driver_output_rank{rank}",
             process_props=process_props,
-            spmd=multi_rank,
+            spmd=spmd,
+            jit_time_step=not args.no_spmd,
             finite_halo_padding=True,
         )
         global_index = dycore.owned_global_index
@@ -153,9 +155,9 @@ def run(args: argparse.Namespace) -> None:
             process_props=process_props,
             backend=None,
             jax=True,
-            jax_jit_time_step=True,
+            jax_jit_time_step=not args.no_spmd,
             jax_exchange_read_fields_only=multi_rank,
-            jax_spmd=multi_rank,
+            jax_spmd=spmd,
             on_step_end=record,
         )
         # run_driver's per-step hook sees no tracers: they are compared after the last step
@@ -345,6 +347,11 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--steps", type=int, required=True)
     r.add_argument("--out", required=True)
     r.add_argument("--mpi", action="store_true", help="decompose over the MPI ranks")
+    r.add_argument(
+        "--no-spmd",
+        action="store_true",
+        help="host halo exchange between per-substep jitted steps instead of one SPMD program",
+    )
     r.add_argument(
         "--diagnostics-every", type=int, help="adapter only: sample every N steps, no npz output"
     )

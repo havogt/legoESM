@@ -1,11 +1,12 @@
 #!/bin/bash -l
-# icon4py's JAX model (R02B04, experiment EXPERIMENT) on all ranks: legoESM adapter vs icon4py's own SPMD driver,
-# a 1-rank adapter run, then the comparison. The layout comes from the sbatch command line:
+# icon4py's JAX model (R02B04, experiment EXPERIMENT) on all ranks: legoESM adapter vs icon4py's
+# own driver, a 1-rank adapter run, then the comparison. Layout from the sbatch command line:
 #   sbatch --nodes=2 --ntasks-per-node=1 --gpus-per-node=1 icon4py_jax_spmd.sbatch
 #   sbatch --nodes=2 --ntasks-per-node=4 --gpus-per-node=4 icon4py_jax_spmd.sbatch
 # Environment: VENV (built in this uenv with --extra icon --extra icon-mpi), OUT, STEPS,
 # ICON4PY_TEST_DATA_PATH, EXPERIMENT (directory under ser_icondata/,
-# e.g. mpitask1_exclaim_nh35_tri_jws_v12 or mpitask1_exclaim_ape_aesPhys_v14).
+# e.g. mpitask1_exclaim_nh35_tri_jws_v12 or mpitask1_exclaim_ape_aesPhys_v14), SPMD (1: one
+# SPMD program over all ranks; 0: host halo exchange between per-substep jitted steps).
 #SBATCH --job-name=icon4py-jax-spmd
 #SBATCH --account=csstaff
 #SBATCH --partition=normal
@@ -13,19 +14,20 @@
 #SBATCH --uenv=icon/26.7:v1
 #SBATCH --view=default
 set -euo pipefail
-: "${VENV:?}" "${OUT:?}" "${STEPS:?}" "${ICON4PY_TEST_DATA_PATH:?}" "${EXPERIMENT:?}"
+: "${VENV:?}" "${OUT:?}" "${STEPS:?}" "${ICON4PY_TEST_DATA_PATH:?}" "${EXPERIMENT:?}" "${SPMD:?}"
 EXP=$ICON4PY_TEST_DATA_PATH/ser_icondata/$EXPERIMENT
 GRID=$ICON4PY_TEST_DATA_PATH/grids/icon_grid_0013_R02B04_R/icon_grid_0013_R02B04_R.nc
 RUNNER="$VENV/bin/python -m legoesm.atmosphere.dynamics.gcm.icon4py_jax_spmd"
 export XLA_PYTHON_CLIENT_PREALLOCATE=false MPICH_MAX_THREAD_SAFETY=multiple MPICH_GPU_SUPPORT_ENABLED=1
 export NCCL_DEBUG=WARN
 mkdir -p "$OUT"
+SPMD_FLAG=$([ "$SPMD" = 0 ] && echo --no-spmd || true)
 
 run() {  # ntasks mode label
   echo "== $3: $1 ranks, $2, start $(date -Is)"
   srun -n "$1" --cpus-per-task=72 bash -c \
     "export CUDA_VISIBLE_DEVICES=\$SLURM_LOCALID; exec $RUNNER run --mpi --mode $2 --label $3 \
-     --grid $GRID --experiment $EXP --steps $STEPS --out $OUT"
+     --grid $GRID --experiment $EXP --steps $STEPS --out $OUT $SPMD_FLAG"
   echo "== $3: end $(date -Is)"
 }
 
