@@ -1,9 +1,15 @@
-"""icon4py's JAX non-hydrostatic dynamical core, stepped from legoESM (no physics).
+"""icon4py's JAX non-hydrostatic model, stepped from legoESM.
 
-A thin wrapper over ``icon4py.model.driver.jax_driver.JaxIcon4pyDriver`` from the icon4py
-``jax-physics`` line (the optional ``icon`` extra). ``step`` is the body of that driver's time
-loop, on one rank or as icon4py's SPMD program over all ranks; it goes away once icon4py
-provides a pure ``dynamics_step``.
+On one rank without physics, with the whole time step jitted, a step is icon4py's pure
+``jax_api.time_step`` on ``(IconStatic, IconState)``. Otherwise (several ranks, ICON physics,
+or per-substep jit) ``step`` is the body of ``icon4py.model.driver.jax_driver.JaxIcon4pyDriver``'s
+time loop, on one rank or as icon4py's SPMD program over all ranks. Both come from the
+optional ``icon`` extra.
+
+KNOWN DIFFERENCE on the ``jax_api`` path: the number of dynamical substeps is fixed by the
+experiment. The driver path raises it once the step's maximum vertical CFL exceeds
+``vertical_cfl_threshold`` (after entering watch mode at 0.81 of it); ``jax_api`` returns no
+CFL, so nothing here notices when that would have happened.
 """
 
 from __future__ import annotations
@@ -42,6 +48,24 @@ class Icon4pyJaxDycore:
         if process_props is None:
             process_props = decomposition.SingleNodeProcessProperties()
         multi_rank = not process_props.is_single_rank()
+        physics = config.muphys is not None or config.surface is not None or config.tmx is not None
+        self._field_dim = {"vn": dims.EdgeDim}
+        self.uses_jax_api = not multi_rank and not physics and jit_time_step
+        if self.uses_jax_api:
+            import jax
+            from icon4py.model.driver import jax_api
+
+            self._api_static, self._api_state = jax_api.init_from_grid_file(
+                pathlib.Path(grid_file), config
+            )
+            self._api_step = jax.jit(jax_api.time_step)
+            self.driver = None
+            self.owned_global_index = {
+                dims.CellDim: np.arange(self._api_state.prognostic["rho"].ndarray.shape[0]),
+                dims.EdgeDim: np.arange(self._api_state.prognostic["vn"].ndarray.shape[0]),
+            }
+            self.steps_done = 0
+            return
         if spmd and multi_rank:
             jax_utils.initialize_distributed(process_props.comm)
         allocator = model_backends.get_allocator(None)
@@ -57,7 +81,6 @@ class Icon4pyJaxDycore:
         self.owned_global_index = {
             dim: np.asarray(info.global_index(dim, owned)) for dim in (dims.CellDim, dims.EdgeDim)
         }
-        self._field_dim = {"vn": dims.EdgeDim}
         self.driver = driver.initialize_driver(
             config=config,
             grid_manager=grid_manager,
@@ -84,6 +107,11 @@ class Icon4pyJaxDycore:
         self.steps_done = 0
 
     def step(self) -> None:
+        if self.uses_jax_api:
+            self._api_state = self._api_step(self._api_static, self._api_state)
+            self._api_state.prognostic["vn"].ndarray.block_until_ready()
+            self.steps_done += 1
+            return
         d = self.driver
         time_vars = d.model_time_variables
         time_vars.advance_simulation_datetime()
@@ -139,10 +167,13 @@ class Icon4pyJaxDycore:
         """This rank's owned points of the prognostic fields and tracers, in local order."""
         from icon4py.model.common import dimension as dims
 
-        local = self.driver._local({**self._prognostic, **self._tracers})
+        if self.uses_jax_api:
+            local = {**self._api_state.prognostic, **self._api_state.tracers}
+        else:
+            local = self.driver._local({**self._prognostic, **self._tracers})
         return {
             name: np.asarray(local[name].asnumpy())[
                 : self.owned_global_index[self._field_dim.get(name, dims.CellDim)].size
             ]
-            for name in (*PROGNOSTIC_FIELDS, *self._tracers)
+            for name in local
         }

@@ -106,6 +106,12 @@ def run(args: argparse.Namespace) -> None:
         )
         global_index = dycore.owned_global_index
         if args.diagnostics_every:
+            if dycore.uses_jax_api:
+                raise NotImplementedError(
+                    "--diagnostics-every reads cell_area and ddqz_z_full from the driver's "
+                    "static-field factories, which the jax_api path (one rank, no physics) "
+                    "does not build"
+                )
             _diagnosed_run(dycore, process_props, args, out)
             return
         for _ in range(args.steps):
