@@ -52,6 +52,8 @@ def _process_props(mpi: bool):
 
     if not mpi:
         return decomposition.SingleNodeProcessProperties()
+    from icon4py.model.common.decomposition import mpi_decomposition  # noqa: F401  # registers MPI
+
     return decomposition.get_process_properties(decomposition.get_runtype(with_mpi=True))
 
 
