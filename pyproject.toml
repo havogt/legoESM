@@ -171,8 +171,8 @@ legoesm-ice = { workspace = true }
 legoesm-coupler = { workspace = true }
 legoesm-ml = { workspace = true }
 legoesm-tools = { workspace = true }
-icon4py-driver = { git = "https://github.com/havogt/icon4py", rev = "3ac7cd6520313a7ddbd884fe53026511ce623992", subdirectory = "model/driver" }
-icon4py-common = { git = "https://github.com/havogt/icon4py", rev = "3ac7cd6520313a7ddbd884fe53026511ce623992", subdirectory = "model/common" }
+icon4py-driver = { git = "https://github.com/havogt/icon4py", rev = "dda26623cf8c92831c2af55305fe41439375979b", subdirectory = "model/driver" }
+icon4py-common = { git = "https://github.com/havogt/icon4py", rev = "dda26623cf8c92831c2af55305fe41439375979b", subdirectory = "model/common" }
 gt4py = { git = "https://github.com/havogt/gt4py", rev = "a352ee337fe6a0670bacdd6fa4c638bc4e4a692b" }
 
 [tool.ruff]
