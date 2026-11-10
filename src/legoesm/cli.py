@@ -162,6 +162,17 @@ def cmd_run(args):
     try:
         config = Config.from_yaml(args.config)
         apply_overrides(config, getattr(args, "overrides", []))
+        if (config.get("atmosphere.discretization") == "icon"
+                and config.get("hardware.parallelism.distributed")
+                and config.get("atmosphere.icon_spmd")):
+            # icon4py's jax.distributed must start before legoESM's driver modules,
+            # some of which touch a JAX backend when imported
+            import mpi4py
+            mpi4py.rc.thread_level = "multiple"
+            from mpi4py import MPI
+            if MPI.COMM_WORLD.size > 1:
+                from icon4py.model.driver import jax_utils
+                jax_utils.initialize_distributed(MPI.COMM_WORLD)
 
         # --- Runtime bootstrap (before any JAX-heavy imports) ---
         logger.info(f"legoESM v{__version__} | Loaded config from {args.config}")

@@ -99,7 +99,10 @@ class Icon4pyJaxDycore:
             self.steps_done = 0
             return
         if spmd and multi_rank:
-            jax_utils.initialize_distributed(process_props.comm)
+            import jax
+
+            if not jax.distributed.is_initialized():
+                jax_utils.initialize_distributed(process_props.comm)
         allocator = model_backends.get_allocator(None)
         grid_manager = driver_utils.create_grid_manager(
             grid_file_path=pathlib.Path(grid_file),
