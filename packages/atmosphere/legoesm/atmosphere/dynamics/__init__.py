@@ -255,6 +255,7 @@ DYNAMICS_OPTIONS = ["shallow_water", "hydrostatic", "nonhydrostatic"]
 DISCRETIZATION_OPTIONS = [
     "cdgrid", "spectral", "sfno", "u_cast", "mpas", "latlon_cgrid", "plane",
     "fv3_duo",
+    "icon",
     # Legacy names kept as valid options (default to cdgrid when grid is
     # unknown; the driver resolves more precisely using grid_type).
     "finite_volume", "centered",

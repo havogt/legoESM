@@ -117,6 +117,8 @@ class GridConfig(NamedTuple):
     # stratospheric layers up to sigma_top (the raised-lid experiment).
     sigma_layout: str = "standard"
     use_duogrid: bool = False        # enable FV3 Duo-Grid halo (required for MPI multi-node)
+    # ICON grid file (grid_type="icon" only; required there, no default path)
+    grid_file: str | None = None
 
 
 # Canonical name for the SCVT Voronoi mesh + TRiSK discretization.
@@ -422,6 +424,12 @@ class DycoreConfig(NamedTuple):
     # Default ("q_v",) since 2026-10-15 (user decision after the 30/60-day pair
     # against the flux form); amip_production.yaml also pins it explicitly.
     mpas_vert4_log_form_tracers: tuple = ("q_v",)
+    # ICON lane (discretization="icon"): required there, set explicitly in the deck.
+    # icon_spmd: one SPMD program over all ranks (True) or host halo exchange
+    # between per-substep jitted steps (False). icon_finite_halo_padding: finite
+    # instead of NaN padding of unexchanged halo rows (True for gradient runs).
+    icon_spmd: bool | None = None
+    icon_finite_halo_padding: bool | None = None
 
 
 class EvaluationConfig(NamedTuple):
@@ -2174,6 +2182,10 @@ class ExperimentConfig(NamedTuple):
     # droplet size reset in the sedimentation fall speeds (prognostic droplet
     # number only); 0 = MG2's hard clip.  Range [0, 1], checked in validate_strict.
     morrison_mg2_drop_sed_reset_log_width: float = 0.01
+    # ICON lane settings (legoesm.atmosphere.dynamics.gcm.icon_config.IconConfig);
+    # None = the lane is not selected. validate_strict requires it exactly when
+    # dycore.discretization == "icon".
+    icon: Any = None
 
     def _liquid_partition_resolved(self) -> bool:
         """Is CLUBB's cloud-liquid exchange selected, by ANY route?
@@ -2229,6 +2241,12 @@ class ExperimentConfig(NamedTuple):
         """
         g = self.grid
         d = self.dycore
+        if d.discretization == "icon" or g.grid_type == "icon" or self.icon is not None:
+            icon_errors = self._icon_lane_errors()
+            if icon_errors:
+                raise ValueError(
+                    "Invalid ExperimentConfig (ICON lane):\n  " + "\n  ".join(icon_errors))
+            return
         errors: list[str] = []
         # The faithful IFS convection hands its detrained rain and snow
         # (PSNDE) to the host's rain and snow species (user 2026-10-28, R12):
@@ -5079,6 +5097,62 @@ class ExperimentConfig(NamedTuple):
                 "Invalid ExperimentConfig:\n  " + "\n  ".join(errors)
             )
 
+    def _icon_lane_errors(self) -> list[str]:
+        """The ICON lane's own admission rules; every other field is held to its default by
+        the factory's default-deny wall."""
+        g, d, o = self.grid, self.dycore, self.output
+        errors: list[str] = []
+        if (d.discretization, g.grid_type, d.model_type) != ("icon", "icon", "nonhydrostatic"):
+            errors.append(
+                "the ICON lane is dycore.discretization='icon' with grid.grid_type='icon' and "
+                f"dycore.model_type='nonhydrostatic'; got {d.discretization!r}, "
+                f"{g.grid_type!r}, {d.model_type!r}")
+        if self.icon is None:
+            errors.append("ExperimentConfig.icon is required on the ICON lane")
+        if not g.grid_file:
+            errors.append("grid.grid_file is required on the ICON lane")
+        for name in ("icon_spmd", "icon_finite_halo_padding"):
+            if not isinstance(getattr(d, name), bool):
+                errors.append(f"dycore.{name} must be set explicitly (true or false)")
+        if d.column_lane:
+            errors.append("dycore.column_lane: the ICON lane is a closed lane")
+        if self.precision not in ("fp64", "float64"):
+            errors.append(f"precision={self.precision!r}: the ICON lane runs fp64 only")
+        families = {"microphysics": "icon_muphys", "turbulence": "icon_tmx",
+                    "surface_bulk_scheme": "icon_fixed_heat_fluxes"}
+        for key in ("radiation", "cloud_scheme", "convection", "gravity_wave_drag",
+                    "physics_parameterization", *families):
+            value = getattr(self, key)
+            allowed = ("none", families[key]) if key in families else ("none",)
+            if value not in allowed:
+                errors.append(f"{key}={value!r}: the ICON lane takes {allowed} only "
+                              "(set it explicitly)")
+        if self.icon is not None:
+            for key, block in (("microphysics", "muphys"), ("turbulence", "tmx"),
+                               ("surface_bulk_scheme", "surface")):
+                if (getattr(self, key) == families[key]) != (getattr(self.icon, block) is not None):
+                    errors.append(f"{key}={getattr(self, key)!r} and icon.{block} disagree: "
+                                  f"the block is given exactly when {key}={families[key]!r}")
+            dyc = self.icon.dycore
+            if dyc.divdamp_order == "combined" and dyc.apply_extra_second_order_divdamp:
+                errors.append("icon.dycore: divdamp_order='combined' with "
+                              "apply_extra_second_order_divdamp=true is refused by icon4py")
+        if self.ic != "icon_jablonowski_williamson":
+            errors.append(f"ic={self.ic!r}: the ICON lane has 'icon_jablonowski_williamson'")
+        if self.topography not in ("flat", "icon_jablonowski_williamson"):
+            errors.append(f"topography={self.topography!r}: the ICON lane has 'flat' and "
+                          "'icon_jablonowski_williamson'")
+        dt = float(d.dt)
+        if dt <= 0 or dt != round(dt):
+            errors.append(f"dycore.dt={d.dt!r}: the ICON lane needs a whole number of seconds")
+        elif (self.days * 86400.0 / dt) != round(self.days * 86400.0 / dt):
+            errors.append(f"days={self.days!r} is not a whole number of {dt:g} s steps")
+        if not o.output_dir:
+            errors.append("output.output_dir is required on the ICON lane")
+        if o.checkpoint_days:
+            errors.append("output.checkpoint_days: the ICON lane writes no checkpoints yet")
+        return errors
+
     def validate(self) -> list[str]:
         """Check for suspicious parameter combinations.
 
@@ -5571,6 +5645,48 @@ from legoesm.driver.run_config_yaml import (  # noqa: E402
     RENAMED_CONFIG_KEYS, migrate_renamed_keys)
 
 
+def _icon_config_to_dict(icon) -> dict | None:
+    if icon is None:
+        return None
+    return {block: (None if sub is None else sub._asdict())
+            for block, sub in icon._asdict().items()}
+
+
+def _icon_config_from_dict(d: dict | None, *, strict: bool):
+    """The ``icon`` block of a deck: every field of every given block is required."""
+    if d is None:
+        return None
+    from legoesm.atmosphere.dynamics.gcm import icon_config
+
+    block_types = {f: t for f, t in zip(icon_config.IconConfig._fields, (
+        icon_config.IconDycoreConfig, icon_config.IconVerticalConfig,
+        icon_config.IconJWConfig, icon_config.IconDiffusionConfig,
+        icon_config.IconTracerAdvectionConfig, icon_config.IconMuphysConfig,
+        icon_config.IconTmxConfig, icon_config.IconSurfaceConfig), strict=True)}
+    problems = []
+    if strict:
+        problems += [f"icon.{k}" for k in d if k not in block_types]
+    blocks = {}
+    for name, cls in block_types.items():
+        if name not in d:
+            problems.append(f"icon.{name} (missing; null when the family is off)")
+            continue
+        sub = d[name]
+        if sub is None:
+            blocks[name] = None
+            continue
+        missing = [k for k in cls._fields if k not in sub]
+        problems += [f"icon.{name}.{k} (missing)" for k in missing]
+        if strict:
+            problems += [f"icon.{name}.{k}" for k in sub if k not in cls._fields]
+        if not missing:
+            blocks[name] = cls(**{k: sub[k] for k in cls._fields})
+    if problems:
+        raise ValueError("icon block: " + ", ".join(problems)
+                         + ". The ICON lane has no defaults: every setting is explicit.")
+    return icon_config.IconConfig(**blocks)
+
+
 def experiment_config_to_dict(config: ExperimentConfig) -> dict:
     """Serialize ExperimentConfig to a JSON-safe dict.
 
@@ -5594,6 +5710,7 @@ def experiment_config_to_dict(config: ExperimentConfig) -> dict:
             if hasattr(sub_d.get('evaluation'), '_asdict'):
                 sub_d['evaluation'] = sub_d['evaluation']._asdict()
             d[key] = sub_d
+    d["icon"] = _icon_config_to_dict(config.icon)
     return d
 
 
@@ -5657,6 +5774,8 @@ def experiment_config_from_dict(d: dict, *, strict: bool = False) -> ExperimentC
     filtered = _lists_to_tuples(
         ExperimentConfig, {k: v for k, v in d.items() if k in known})
     filtered.update(sub_values)
+    if "icon" in filtered:
+        filtered["icon"] = _icon_config_from_dict(filtered["icon"], strict=strict)
 
     # Legacy migration: ``morrison_dep_coeff`` was declared 1e-8 (1e5 OFF the
     # real MorrisonConfig.dep_coeff=1e-3) while UNWIRED, so every serialized
