@@ -78,3 +78,15 @@ def test_mappings_change_only_their_own_fields():
     for section in ("grid", "dycore"):
         diff = {k for k in base[section] if base[section][k] != new[section][k]}
         assert diff <= set(_ICON_FIELDS)
+
+
+def test_icon_grid_takes_no_resolution_unless_the_deck_sets_it():
+    from legoesm.config import Config
+    from legoesm.driver.config import GridConfig
+
+    unset = Config.from_dict({"grid": {"type": "icon"}}).to_experiment_config()
+    assert unset.grid.resolution == GridConfig().resolution
+    explicit = Config.from_dict({"grid": {"type": "icon", "resolution": 48}}).to_experiment_config()
+    assert explicit.grid.resolution == 48
+    other = Config.from_dict({"grid": {"type": "cubed_sphere"}}).to_experiment_config()
+    assert other.grid.resolution == 48

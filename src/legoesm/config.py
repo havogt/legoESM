@@ -287,8 +287,10 @@ def _atm_matrix_spec():
 class Config:
     """Configuration container with dot-access and YAML support."""
 
-    def __init__(self, data: dict | None = None):
+    def __init__(self, data: dict | None = None, given: dict | None = None):
         self._data = data or copy.deepcopy(DEFAULT_CONFIG)
+        # the keys the deck (or ``set``) gave, before the defaults were merged in
+        self._given = copy.deepcopy(given) if given is not None else copy.deepcopy(self._data)
 
     @classmethod
     def from_yaml(cls, path: str) -> Config:
@@ -299,7 +301,7 @@ class Config:
         config = copy.deepcopy(DEFAULT_CONFIG)
         if user_config:  # safe_load returns None for empty files
             deep_merge(config, user_config)
-        return cls(config)
+        return cls(config, given=user_config or {})
 
     @classmethod
     def from_dict(cls, d: dict) -> Config:
@@ -307,7 +309,7 @@ class Config:
         from legoesm.core.setup_selector import deep_merge
         config = copy.deepcopy(DEFAULT_CONFIG)
         deep_merge(config, d)
-        return cls(config)
+        return cls(config, given=d)
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a value using dot notation: config.get('grid.resolution')."""
@@ -323,10 +325,10 @@ class Config:
     def set(self, key: str, value: Any) -> None:
         """Set a value using dot notation."""
         keys = key.split(".")
-        d = self._data
-        for k in keys[:-1]:
-            d = d.setdefault(k, {})
-        d[keys[-1]] = value
+        for d in (self._data, self._given):
+            for k in keys[:-1]:
+                d = d.setdefault(k, {})
+            d[keys[-1]] = value
 
     def to_dict(self) -> dict:
         """Return a deep copy of the config data as a plain dict."""
@@ -409,7 +411,9 @@ class Config:
         canonical = {
             "grid": {
                 "grid_type": grid.get("type", "cubed_sphere"),
-                "resolution": grid.get("resolution", 48),
+                **({} if grid.get("type") == "icon"
+                   and "resolution" not in self._given.get("grid", {})
+                   else {"resolution": grid.get("resolution", 48)}),
                 "nlev": grid.get("n_levels", 40),         # n_levels -> nlev
                 "vertical_coord": grid.get("vertical_coord", "hybrid"),
                 "p_top_Pa": grid.get("p_top_Pa", 200.0),

@@ -124,6 +124,7 @@ def grid_types() -> list[str]:
     """Global grids reachable through the process-based simulate path."""
     grids = {c["grid_type"] for c in driver_combos()}
     grids.discard("plane")  # plane is the LES/CRM branch, asked separately
+    grids.discard("icon")  # the ICON lane runs from `legoesm run` decks with an `icon` block
     return sorted(grids)
 
 
