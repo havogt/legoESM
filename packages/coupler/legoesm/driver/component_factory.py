@@ -104,6 +104,9 @@ _DRIVER_SUPPORTED: dict[tuple[str, str, str], str] = {
     # the spectral primitive-equation state (see ucast_pe.py docstring:
     # ``grid : GaussianGrid``), so it is Gaussian-only too.
     ("hydrostatic",   "u_cast",         "gaussian"):     "ucast_primitive_equations",
+
+    # --- ICON (icon4py's JAX non-hydrostatic model, closed lane) ---
+    ("nonhydrostatic","icon",           "icon"):         "icon_nonhydrostatic",
 }
 
 
@@ -511,6 +514,70 @@ def _refuse_fv3_duo_non_default(config: ExperimentConfig) -> None:
             f"Allowed non-default fields: "
             f"{sorted(_FV3_DUO_ALLOWED_NONDEFAULT)}. Reset the offenders or "
             f"choose a lane that supports them.")
+
+
+# The ICON lane's default-deny wall: every legoESM field the lane does not read is held at
+# its default, so a deck cannot set something that is silently dropped. The ``icon`` block
+# itself is checked by validate_strict and the icon4py builder.
+_ICON_ALLOWED_NONDEFAULT: frozenset[str] = frozenset({
+    "grid.grid_type", "grid.nlev", "grid.grid_file",
+    "dycore.model_type", "dycore.discretization", "dycore.dt",
+    "dycore.icon_spmd", "dycore.icon_finite_halo_padding",
+    "days", "start_day", "start_year", "precision", "ic", "topography",
+    "radiation", "convection", "microphysics", "turbulence", "cloud_scheme",
+    "gravity_wave_drag", "surface_bulk_scheme", "physics_parameterization",
+    "distributed",
+    "output.output_dir", "output.diag_days",
+})
+
+
+def _refuse_icon_non_default(config: ExperimentConfig) -> None:
+    """Refuse every non-default field the ICON lane does not read, all at once."""
+    defaults = dict(_flatten_config_fields(type(config)()))
+    offending = [
+        (path, val)
+        for path, val in _flatten_config_fields(config)
+        if not (path == "icon" or path.startswith("icon."))
+        and path not in _ICON_ALLOWED_NONDEFAULT
+        and not (val == defaults[path])
+    ]
+    if offending:
+        listing = ", ".join(f"{p}={v!r}" for p, v in offending)
+        raise ValueError(
+            f"the ICON lane does not read these settings, so it refuses them away from their "
+            f"defaults ({len(offending)}): {listing}. ICON settings go in the `icon` block; "
+            f"allowed elsewhere: {sorted(_ICON_ALLOWED_NONDEFAULT)}.")
+
+
+def create_icon_model(config: ExperimentConfig):
+    """icon4py's JAX model for the ICON lane, configured from legoESM's config only."""
+    _refuse_icon_non_default(config)
+    if config.distributed:
+        import mpi4py
+
+        mpi4py.rc.thread_level = "multiple"
+        from mpi4py import MPI  # noqa: F401
+    from icon4py.model.common.decomposition import definitions as decomposition
+
+    from legoesm.atmosphere.dynamics.gcm import icon4py_jax
+
+    if config.distributed:
+        from icon4py.model.common.decomposition import mpi_decomposition  # noqa: F401
+
+        process_props = decomposition.get_process_properties(
+            decomposition.get_runtype(with_mpi=True))
+    else:
+        process_props = decomposition.SingleNodeProcessProperties()
+    multi_rank = not process_props.is_single_rank()
+    spmd = multi_rank and config.dycore.icon_spmd
+    return icon4py_jax.Icon4pyJaxDycore(
+        grid_file=config.grid.grid_file,
+        experiment_config=icon4py_jax.build_icon4py_experiment_config(config),
+        jit_time_step=spmd or not multi_rank,
+        process_props=process_props,
+        spmd=spmd,
+        finite_halo_padding=config.dycore.icon_finite_halo_padding,
+    )
 
 
 def _create_fv3_duo_column_model(config: ExperimentConfig, gc, model_type,
@@ -1217,6 +1284,9 @@ def create_atmosphere_dycore(
             anchor_mass_to_initial=dc.fix_mass and dc.conservation_fixer,
         )
         return MPASCompressibleEulerModel(grid, height_coord, terrain_metric, nh_cfg)
+
+    if solver_name == "icon_nonhydrostatic":
+        return create_icon_model(config)
 
     # ----- FV3 six-face duo cube (certified fv_dynamics JAX lane) -----
     if (solver_name == "fv3_duo_primitive_equations"

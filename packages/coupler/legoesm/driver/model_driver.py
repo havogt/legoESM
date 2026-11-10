@@ -2725,6 +2725,9 @@ class ModelDriver:
         self._reject_shallow_water_unrunnable()
         # Strict validation — abort early on invalid parameters
         self.config.validate_strict()
+        if self.config.dycore.discretization == "icon":
+            self._setup_icon()
+            return
         # Bootstrap runtime: precision, backend, devices, and (optionally) MPI.
         # This is the canonical single entry point — handles everything before
         # any JAX array creation.
@@ -9903,6 +9906,97 @@ class ModelDriver:
         self._save_cmor_accumulator_sidecar(day)
         sys.exit(0)
 
+    def _setup_icon(self) -> None:
+        """The ICON lane's setup: icon4py builds its grid, state and physics from the config.
+
+        legoESM's runtime bootstrap is skipped: on several ranks icon4py's
+        ``jax.distributed.initialize`` must run before JAX touches a backend.
+        """
+        from legoesm.driver.component_factory import create_icon_model
+
+        self._output_dir.mkdir(parents=True, exist_ok=True)
+        self.model = create_icon_model(self.config)
+        self.physics = None
+        self._carry_aux = {}
+        props = self.model.process_props
+        self._mpi_rank = props.rank
+        self._mpi_world_size = props.comm_size
+        self._write_run_manifest()
+        self._save_config()
+
+    def _icon_write_status(self, status: str) -> None:
+        if self._mpi_rank == 0:
+            (self._output_dir / "icon_status.txt").write_text(status + "\n")
+
+    def _icon_snapshot(self, step: int, day: float) -> str | None:
+        """This rank's owned prognostics and tracers; ``BLOWUP ...`` if any is not finite."""
+        fields = self.model.prognostics()
+        index = self.model.owned_global_index
+        cell_dim, edge_dim = self.model.cell_and_edge_dims
+        np.savez(
+            self._output_dir / f"icon_snapshot_step_{step:06d}_rank{self._mpi_rank}.npz",
+            gid_cell=index[cell_dim], gid_edge=index[edge_dim], _step=step, _day=day,
+            **{f"{name}_0": value for name, value in fields.items()},
+        )
+        bad = sorted(name for name, value in fields.items() if not np.isfinite(value).all())
+        return f"BLOWUP at day {day:.4f} (step {step}): non-finite {bad}" if bad else None
+
+    def _icon_final_state_digest(self) -> None:
+        """Digest of the GLOBAL final state, assembled by global index on rank 0, so 1-rank and
+        N-rank runs are comparable; never a partial rank-0 digest."""
+        fields = self.model.prognostics()
+        if self._mpi_world_size > 1:
+            from legoesm.atmosphere.dynamics.gcm import icon4py_jax_spmd
+
+            cell_dim, edge_dim = self.model.cell_and_edge_dims
+            index = self.model.owned_global_index
+            mine = {"gid_cell": index[cell_dim], "gid_edge": index[edge_dim], **fields}
+            try:
+                ranks = self.model.process_props.comm.gather(mine, root=0)
+            except Exception as exc:  # noqa: BLE001 - provenance, never fails a completed run
+                logger.warning("ICON lane: state_digest absent, the gather failed: %s", exc)
+                return
+            if self._mpi_rank != 0:
+                return
+            fields = icon4py_jax_spmd.assemble_owned(ranks)
+        self.state, self.tracers = fields, None
+        self._record_final_state_digest()
+
+    def _run_icon(self, start_step: int = 0, start_day: float | None = None) -> str:
+        """The ICON lane's time loop: icon4py's step, snapshots on the diagnostic cadence."""
+        cfg = self.config
+        if start_step:
+            raise ValueError("the ICON lane has no restart yet (no checkpoints)")
+        dt = float(cfg.dycore.dt)
+        n_steps = int(round(cfg.days * 86400.0 / dt))
+        from legoesm.driver.diagnostics import diagnostic_interval_steps
+
+        diag_interval = diagnostic_interval_steps(cfg.output.diag_days, dt, n_steps)
+        day0 = cfg.start_day if start_day is None else start_day
+        logger.info("ICON lane: %d steps of %.0f s on %d rank(s), snapshots every %d steps",
+                    n_steps, dt, self._mpi_world_size, diag_interval)
+        self._icon_write_status("RUNNING")
+        t0 = time.time()
+        for step in range(1, n_steps + 1):
+            try:
+                self.model.step()
+            except RuntimeError as error:
+                if "maximum vertical CFL" not in str(error):
+                    raise
+                status = f"BLOWUP at step {step}: {error}"
+                self._icon_write_status(status)
+                return status
+            day = day0 + step * dt / 86400.0
+            if step % diag_interval == 0 or step == n_steps:
+                blowup = self._icon_snapshot(step, day)
+                if blowup is not None:
+                    self._icon_write_status(blowup)
+                    return blowup
+        logger.info("ICON lane COMPLETED: %d steps in %.1f s", n_steps, time.time() - t0)
+        self._icon_final_state_digest()
+        self._icon_write_status("COMPLETED")
+        return "COMPLETED"
+
     def run(self, start_step: int = 0, start_day: float | None = None,
             compiled: bool = True, segment_callback=None,
             checkpoint_callback=None) -> str:
@@ -9932,6 +10026,8 @@ class ModelDriver:
         str
             Run status ("COMPLETED" or "BLOWUP at day ...").
         """
+        if self.config.dycore.discretization == "icon":
+            return self._run_icon(start_step, start_day)
         if self._mpas_step_exported:
             raise RuntimeError(
                 "run(): this driver was consumed by export_mpas_step (its "
