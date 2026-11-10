@@ -95,10 +95,14 @@ def run(args: argparse.Namespace) -> None:
     steps: list[dict[str, np.ndarray]] = []
 
     if args.mode == "adapter":
+        from icon4py.model.driver import config as driver_config
+
+        experiment_config = driver_config.read_experiment_config_from_yaml(
+            pathlib.Path(args.experiment) / "config.yml"
+        ).with_overrides(driver={"output_path": out / f"driver_output_rank{rank}"})
         dycore = icon4py_jax.Icon4pyJaxDycore(
             grid_file=args.grid,
-            experiment_config=pathlib.Path(args.experiment) / "config.yml",
-            output_path=out / f"driver_output_rank{rank}",
+            experiment_config=experiment_config,
             process_props=process_props,
             spmd=spmd,
             jit_time_step=not args.no_spmd,
@@ -114,9 +118,10 @@ def run(args: argparse.Namespace) -> None:
                 )
             _diagnosed_run(dycore, process_props, args, out)
             return
-        for _ in range(args.steps):
+        for k in range(args.steps):
             dycore.step()
-            steps.append(dycore.prognostics())
+            if not args.save_last or k == args.steps - 1:
+                steps.append(dycore.prognostics())
     else:
         from icon4py.model.common import model_backends
         from icon4py.model.common.decomposition import definitions as decomposition
@@ -146,6 +151,8 @@ def run(args: argparse.Namespace) -> None:
         }
 
         def record(time_step, state):
+            if args.save_last and time_step != args.steps - 1:
+                return
             steps.append(
                 {
                     name: getattr(state, name).asnumpy()[
@@ -175,7 +182,7 @@ def run(args: argparse.Namespace) -> None:
             }
         )
 
-    assert len(steps) == args.steps
+    assert len(steps) == (1 if args.save_last else args.steps)
     np.savez(
         out / f"rank{rank}.npz",
         gid_cell=global_index[dims.CellDim],
@@ -259,23 +266,28 @@ def _diagnosed_run(dycore, process_props, args: argparse.Namespace, out: pathlib
         print(json.dumps({k: v for k, v in summary.items() if k != "samples"}), flush=True)
 
 
-def assemble(run_dir: pathlib.Path, steps: int) -> list[dict[str, np.ndarray]]:
-    """The global fields of a run, from every rank's owned points ordered by global index."""
-    ranks = [dict(np.load(f)) for f in sorted(run_dir.glob("rank*.npz"))]
-    assert ranks, f"no rank*.npz in {run_dir}"
+def assemble_owned(ranks: list[dict], suffix: str = "") -> dict[str, np.ndarray]:
+    """Global fields from every rank's owned points (``gid_cell``/``gid_edge`` plus
+    ``<name><suffix>`` arrays), ordered by global index."""
     gid = {k: np.concatenate([r[k] for r in ranks]) for k in ("gid_cell", "gid_edge")}
     for index in gid.values():
         assert np.array_equal(np.sort(index), np.arange(index.size)), "owned points: no partition"
-    return [
-        {
-            name: np.concatenate([r[f"{name}_{k}"] for r in ranks])[
-                np.argsort(gid["gid_edge" if name == "vn" else "gid_cell"])
-            ]
-            for name in (*PROGNOSTIC_FIELDS, *TRACERS)
-            if f"{name}_{k}" in ranks[0]
-        }
-        for k in range(steps)
-    ]
+    return {
+        name: np.concatenate([r[f"{name}{suffix}"] for r in ranks])[
+            np.argsort(gid["gid_edge" if name == "vn" else "gid_cell"])
+        ]
+        for name in (*PROGNOSTIC_FIELDS, *TRACERS)
+        if f"{name}{suffix}" in ranks[0]
+    }
+
+
+def assemble(
+    run_dir: pathlib.Path, steps: int, pattern: str = "rank*.npz"
+) -> list[dict[str, np.ndarray]]:
+    """The global fields of a run, from every rank's owned points ordered by global index."""
+    ranks = [dict(np.load(f)) for f in sorted(run_dir.glob(pattern))]
+    assert ranks, f"no {pattern} in {run_dir}"
+    return [assemble_owned(ranks, f"_{k}") for k in range(steps)]
 
 
 def experiment_name(experiment: pathlib.Path) -> str:
@@ -298,7 +310,10 @@ def step_dates(experiment: pathlib.Path, steps: int) -> list[str]:
 def compare(args: argparse.Namespace) -> int:
     out = pathlib.Path(args.out)
     experiment = pathlib.Path(args.experiment)
-    runs = {label: assemble(out / label, args.steps) for label in args.labels}
+    runs = {
+        label: assemble(out / label, args.steps, args.pattern.get(label, "rank*.npz"))
+        for label in args.labels
+    }
     failures = []
     first, *rest = args.labels
     for label in rest if args.bitwise else ():
@@ -311,7 +326,7 @@ def compare(args: argparse.Namespace) -> int:
         failures += different
         print(f"bitwise {first} vs {label}: {'DIFFERENT' if different else 'equal'}")
     tolerances = SAVEPOINT_TOLERANCES[experiment_name(experiment)]
-    for label in args.labels:
+    for label in args.labels if not args.no_savepoints else ():
         for k, date in enumerate(step_dates(experiment, args.steps)):
             reference = savepoint_fields(experiment, date)
             errors = []
@@ -353,6 +368,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--steps", type=int, required=True)
     r.add_argument("--out", required=True)
     r.add_argument("--mpi", action="store_true", help="decompose over the MPI ranks")
+    r.add_argument("--save-last", action="store_true", help="keep only the final step (as step 0)")
     r.add_argument(
         "--no-spmd",
         action="store_true",
@@ -368,7 +384,17 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--labels", nargs="+", required=True)
     c.add_argument("--bitwise", action="store_true")
     c.add_argument("--max-diff-against", nargs="*")
+    c.add_argument("--no-savepoints", action="store_true", help="skip the savepoint check")
+    c.add_argument(
+        "--pattern",
+        nargs="*",
+        default=[],
+        metavar="LABEL=GLOB",
+        help="per-run file pattern (default rank*.npz)",
+    )
     args = parser.parse_args(argv)
+    if args.command == "compare":
+        args.pattern = dict(item.split("=", 1) for item in args.pattern)
     if args.command == "run":
         run(args)
         return 0

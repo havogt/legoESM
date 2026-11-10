@@ -58,6 +58,14 @@ _REFERENCE = textwrap.dedent(
 )
 
 
+def _exclaim_config(config_yml, output_path):
+    from icon4py.model.driver import config as driver_config
+
+    return driver_config.read_experiment_config_from_yaml(config_yml).with_overrides(
+        driver={"output_path": output_path}
+    )
+
+
 def _savepoint_fields(date: str) -> dict[str, np.ndarray]:
     return icon4py_jax_spmd.savepoint_fields(EXPERIMENT, date)
 
@@ -66,8 +74,9 @@ def _savepoint_fields(date: str) -> dict[str, np.ndarray]:
 def adapter_steps(tmp_path_factory):
     dycore = icon4py_jax.Icon4pyJaxDycore(
         grid_file=GRID_FILE,
-        experiment_config=EXPERIMENT / "config.yml",
-        output_path=tmp_path_factory.mktemp("adapter_output"),
+        experiment_config=_exclaim_config(
+            EXPERIMENT / "config.yml", tmp_path_factory.mktemp("adapter_output")
+        ),
     )
     steps = []
     for _ in STEP_DATES:
@@ -130,8 +139,7 @@ def test_cfl_guard_raises_where_the_driver_would_add_substeps(tmp_path):
     (tmp_path / "config.yml").write_text(text)
     dycore = icon4py_jax.Icon4pyJaxDycore(
         grid_file=grid,
-        experiment_config=tmp_path / "config.yml",
-        output_path=tmp_path / "output",
+        experiment_config=_exclaim_config(tmp_path / "config.yml", tmp_path / "output"),
     )
     assert dycore.uses_jax_api
     with pytest.raises(RuntimeError, match="maximum vertical CFL"):
