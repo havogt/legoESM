@@ -164,17 +164,21 @@ def cmd_run(args):
         apply_overrides(config, getattr(args, "overrides", []))
 
         # --- Runtime bootstrap (before any JAX-heavy imports) ---
-        from legoesm.runtime import bootstrap_from_yaml_config
-        rc = bootstrap_from_yaml_config(config)
-
         logger.info(f"legoESM v{__version__} | Loaded config from {args.config}")
         logger.info(f"  Model: {config.get('model.name')}")
-        logger.info(f"  Grid: {config.get('grid.type')} C{config.get('grid.resolution')}")
         logger.info(f"  Duration: {config.get('time.duration_hours')} hours")
-        logger.info(f"  Backend: {rc.backend}")
-        logger.info(f"  Devices: {rc.device_config.n_devices}")
-        logger.info(f"  Distributed: {rc.distributed}")
-        logger.info(f"  Precision: {rc.precision}")
+        if config.get("atmosphere.discretization") == "icon":
+            # icon4py sets up JAX itself: on several ranks its jax.distributed.initialize
+            # must run before anything touches a JAX backend
+            logger.info("  ICON lane: legoESM's runtime bootstrap is skipped")
+        else:
+            from legoesm.runtime import bootstrap_from_yaml_config
+            rc = bootstrap_from_yaml_config(config)
+            logger.info(f"  Grid: {config.get('grid.type')} C{config.get('grid.resolution')}")
+            logger.info(f"  Backend: {rc.backend}")
+            logger.info(f"  Devices: {rc.device_config.n_devices}")
+            logger.info(f"  Distributed: {rc.distributed}")
+            logger.info(f"  Precision: {rc.precision}")
 
         # Now safe to import JAX-heavy model code.
         from legoesm.driver.model_driver import ModelDriver
