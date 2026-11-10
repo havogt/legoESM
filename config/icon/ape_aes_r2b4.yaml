@@ -1,0 +1,150 @@
+# legoESM ICON lane: Aquaplanet with ICON AES physics, R02B04.
+# Reproduces icon4py's EXCLAIM experiment mpitask1_exclaim_ape_aesPhys_v14 (every ICON setting explicit;
+# the lane has no defaults). The grid file is machine-specific:
+#   legoesm run config/icon/ape_aes_r2b4.yaml --set grid.grid_file=<path to icon_grid_0013_R02B04_R.nc>
+model:
+  name: Aquaplanet with ICON AES physics, R02B04
+grid:
+  type: icon
+  n_levels: 35
+atmosphere:
+  dynamics: nonhydrostatic
+  discretization: icon
+  dt_seconds: 300.0
+  icon_spmd: true
+  icon_finite_halo_padding: false
+time:
+  duration_hours: 24
+  start_year: 2008
+  start_day: 244.0
+  output_interval_hours: 24
+output:
+  path: output/ape_aes_r2b4
+  checkpoint_days: 0
+hardware:
+  precision:
+    mode: fp64
+radiation:
+  scheme: none
+physics:
+  convection: none
+  microphysics: icon_muphys
+  turbulence: icon_tmx
+  clouds: none
+  gravity_wave_drag: none
+surface:
+  bulk_scheme: icon_fixed_heat_fluxes
+ic: icon_jablonowski_williamson
+topography: flat
+icon:
+  dycore:
+    exner_expol: 0.3333333333333333
+    vwind_offctr: 0.15
+    thslp_zdiffu: 0.025
+    thhgtd_zdiffu_m: 200.0
+    rayleigh_coeff: 0.1
+    divdamp_trans_start_m: 12500.0
+    divdamp_trans_end_m: 17500.0
+    divergence_averaging_central_cell_weight: 0.5
+    lsq_high_ord: 3
+    apply_extra_second_order_divdamp: false
+    diffuse_before_time_loop: false
+    vertical_cfl_threshold: 1.05
+    ndyn_substeps: 5
+    itime_scheme: most_efficient
+    iadv_rhotheta: miura
+    igradp_method: taylor_hydro
+    rayleigh_type: klemp
+    divdamp_order: combined
+    divdamp_type: three_dimensional
+    extra_diffu: true
+    rhotheta_offctr: -0.1
+    veladv_offctr: 0.25
+    fourth_order_divdamp_factor: 0.0025
+    fourth_order_divdamp_factor2: 0.004
+    fourth_order_divdamp_factor3: 0.004
+    fourth_order_divdamp_factor4: 0.004
+    fourth_order_divdamp_z_m: 32500.0
+    fourth_order_divdamp_z2_m: 40000.0
+    fourth_order_divdamp_z3_m: 60000.0
+    fourth_order_divdamp_z4_m: 80000.0
+  vertical:
+    maximal_layer_thickness_m: 25000.0
+    top_height_limit_for_maximal_layer_thickness_m: 15000.0
+    lowest_layer_thickness_m: 50.0
+    model_top_height_m: 23500.0
+    flat_height_m: 16000.0
+    stretch_factor: 1.0
+    rayleigh_damping_height_m: 45000.0
+    htop_moist_proc_m: 22500.0
+    sleve_decay_scale_1_m: 4000.0
+    sleve_decay_scale_2_m: 2500.0
+    sleve_decay_exponent: 1.2
+  jw:
+    p_sfc_Pa: 101325.0
+    baroclinic_amplitude: 2.0
+    u0_m_s: 35.0
+    temp0_K: 273.15
+    eta_0: 0.252
+    eta_t: 0.2
+    gamma_K_m: 0.005
+    dtemp_K: 480000.0
+    lon_perturbation_center_rad: 0.3490658503988659
+    lat_perturbation_center_rad: 0.6981317007977318
+    rh_at_1000hpa: 0.7
+    qv_max_kg_kg: 0.02
+    moisture_init_iterations: 10
+    global_moisture_content_kg_m2: 50.0
+    normalize_global_moisture: true
+  diffusion:
+    diffusion_type: smagorinsky_4th_order
+    apply_to_vertical_wind: true
+    apply_to_horizontal_wind: true
+    apply_to_temperature: false
+    apply_smag_diff_to_vertical_wind: false
+    compute_3d_smag_coeff: false
+    type_vn_diffu: diamond_vertices
+    type_t_diffu: heterogeneous
+    hdiff_efdt_ratio: 10.0
+    hdiff_w_efdt_ratio: 15.0
+    smagorinski_scaling_factor: 0.025
+    smagorinski_scaling_factor2: 0.07137250900268555
+    smagorinski_scaling_factor3: 0.0
+    smagorinski_scaling_factor4: 1.0
+    smagorinski_scaling_height_m: 32500.0
+    smagorinski_scaling_height2_m: 60686.25390625
+    smagorinski_scaling_height3_m: 50000.0
+    smagorinski_scaling_height4_m: 90000.0
+    apply_zdiffusion_t: false
+    temperature_boundary_diffusion_denominator: 135.0
+    velocity_boundary_diffusion_denominator: 200.0
+    shear_type: vertical_of_horizontal_wind
+    a_hshr: 1.0
+  tracer_advection:
+    horizontal_advection_type: second_order_linear_miura
+    horizontal_advection_limiter: positive_definite
+    vertical_advection_type: third_order_ppm
+    vertical_advection_limiter: semi_monotonic
+  muphys:
+    qnc_per_m3: 50000000.0
+  tmx:
+    solver_type: implicit
+    energy_type: internal
+    dissipation_factor: 1.0
+    use_louis: true
+    use_louis_land: true
+    use_louis_ice: true
+    louis_constant_b: 4.2
+    use_km_const: false
+    km_const_m2_s: 1.0
+    use_scale_turb_energy_flux: false
+    scale_turb_energy_flux: 1.0
+    smag_constant: 0.23
+    turb_prandtl: 0.33333333333
+    km_min_m2_s: 0.001
+    max_turb_scale_m: 300.0
+  surface:
+    surface_flux_type: fixed_heat_fluxes
+    kinematic_sensible_heat_flux_K_m_s: 0.1
+    kinematic_latent_heat_flux_m_s: 0.0
+    sea_surface_temperature_K: 303.15
