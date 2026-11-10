@@ -35,6 +35,10 @@ def main():
     # --- run command ---
     run_parser = subparsers.add_parser("run", help="Run a simulation from config")
     run_parser.add_argument("config", help="Path to YAML configuration file")
+    run_parser.add_argument(
+        "--set", dest="overrides", action="append", default=[], metavar="KEY=VALUE",
+        help="Override one config key by dot path (repeatable), e.g. "
+             "--set grid.grid_file=/path/to/grid.nc; VALUE is parsed as YAML.")
 
     # --- test command ---
     test_parser = subparsers.add_parser("test", help="Run standard test cases")
@@ -132,6 +136,19 @@ def cmd_wizard(args):
     sys.exit(wizard.main())
 
 
+def apply_overrides(config, overrides) -> None:
+    """Apply ``KEY=VALUE`` overrides (dot paths, YAML-parsed values) to a Config."""
+    import yaml
+
+    for item in overrides:
+        key, sep, raw = item.partition("=")
+        if not sep or not key or any(not part for part in key.split(".")):
+            raise ValueError(f"--set expects KEY=VALUE with a dot-path KEY, got {item!r}")
+        value = yaml.safe_load(raw)
+        config.set(key, value)
+        logger.info(f"  --set {key} = {value!r}")
+
+
 def cmd_run(args):
     """Run a simulation from a config file."""
     from legoesm.config import Config
@@ -144,6 +161,7 @@ def cmd_run(args):
 
     try:
         config = Config.from_yaml(args.config)
+        apply_overrides(config, getattr(args, "overrides", []))
 
         # --- Runtime bootstrap (before any JAX-heavy imports) ---
         from legoesm.runtime import bootstrap_from_yaml_config

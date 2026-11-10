@@ -72,6 +72,9 @@ _ATMOSPHERE_KEYS: frozenset[str] = frozenset({
     # mapped (unlike the retired keys), so it must be allowed -- omitting it
     # would reject a config this boundary still honours.
     "radiation",
+    # ICON lane (dycore.discretization="icon"): required there, no default here.
+    "icon_spmd",
+    "icon_finite_halo_padding",
 })
 
 # Keys this dialect used to DECLARE while wiring them to nothing.  They are
@@ -479,6 +482,20 @@ class Config:
                 hardware.get("parallelism", {}).get("distributed", False)
             ),
         }
+
+        # Mapped only when the YAML sets them: absent keeps ExperimentConfig's own
+        # default, so a deck without them resolves exactly as before.
+        for (block, key), (section, field) in (
+            ((grid, "grid_file"), ("grid", "grid_file")),
+            ((atm, "icon_spmd"), ("dycore", "icon_spmd")),
+            ((atm, "icon_finite_halo_padding"), ("dycore", "icon_finite_halo_padding")),
+            ((d, "ic"), (None, "ic")),
+            ((d, "topography"), (None, "topography")),
+            ((time_cfg, "start_year"), (None, "start_year")),
+            ((d, "icon"), (None, "icon")),
+        ):
+            if key in block:
+                (canonical[section] if section else canonical)[field] = block[key]
 
         return experiment_config_from_dict(canonical)
 
