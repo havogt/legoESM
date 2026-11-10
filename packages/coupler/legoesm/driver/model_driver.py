@@ -1916,10 +1916,13 @@ class ModelDriver:
         # hydrostatic lane carries its native face winds between steps.
         self._persistent_cgrid = False
         self.tracers: dict[str, jax.Array] = {}
+        # the ICON lane's tracers are icon4py's own; legoESM's registry stays empty there
+        _registry_scheme = ("none" if config.dycore.discretization == "icon"
+                            else config.microphysics)
         self.tracer_registry: TracerRegistry = moisture_registry_for(
-            config.microphysics, registry_scheme_config(config))
+            _registry_scheme, registry_scheme_config(config))
         validate_microphysics_tracer_slots(
-            config.microphysics,
+            _registry_scheme,
             self.tracer_registry.n_tracers,
             context="ModelDriver tracer registry",
             scheme_config=registry_scheme_config(config),
