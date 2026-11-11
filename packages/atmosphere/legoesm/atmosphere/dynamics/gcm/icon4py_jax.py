@@ -19,9 +19,44 @@ from __future__ import annotations
 import functools
 import pathlib
 
+import jax.numpy as jnp
 import numpy as np
 
 PROGNOSTIC_FIELDS = ("vn", "w", "rho", "exner", "theta_v")
+
+
+def land_surface_fluxes(*, shflx, lhflx, surface_mass_flux, tau_x, tau_y, T_lowest) -> dict:
+    """ICON's ``SurfaceFluxState`` arrays from a legoESM land response: legoESM's fluxes are
+    positive up and its stress is the drag on the air, ICON's are positive down (into the
+    surface). The heat flux the land loses is the internal energy the air gains; the vapour
+    carries its internal energy as in icon4py's prescribed-flux scheme. The slab has no canopy,
+    so no snow on it melts from the air (``q_snocpymlt``)."""
+    from icon4py.model.common.constants import PhysicsConstants
+
+    evapotranspiration = -surface_mass_flux
+    return {
+        "evapotranspiration": evapotranspiration,
+        "sensible_heat_flux": -shflx,
+        "latent_heat_flux": -lhflx,
+        "u_stress": -tau_x,
+        "v_stress": -tau_y,
+        "q_snocpymlt": jnp.zeros_like(shflx),
+        "thermal_energy_flux": -shflx,
+        "vapor_energy_flux": T_lowest
+        * evapotranspiration
+        * (float(PhysicsConstants.cvv) - float(PhysicsConstants.cvd)),
+    }
+
+
+def surface_flux_state(template, arrays: dict):
+    """A ``SurfaceFluxState`` with the cell fields of ``template`` replaced by ``arrays``."""
+    import dataclasses
+
+    def field(name, value):
+        old = getattr(template, name)
+        return type(old).from_array(value, domain=old.domain)
+
+    return dataclasses.replace(template, **{k: field(k, v) for k, v in arrays.items()})
 
 
 def per_group_time_step(static, state, *, surface):
