@@ -89,7 +89,8 @@ def test_the_core_on_pressures_is_the_sigma_precompute(tmp_path):
     sigma = make_cam6_l32_levels()
     p_s = jnp.full((7,), 1.0e5)
     got = radiation_forcing_on_columns(
-        15.5, sigma.pressure_at_full(p_s).reshape(7, -1), sigma.pressure_at_half(p_s).reshape(7, -1),
+        15.5, sigma.pressure_at_full(p_s).reshape(7, -1),
+        sigma.pressure_at_half(p_s).reshape(7, -1),
         jnp.radians(jnp.linspace(-90.0, 90.0, 7)), None, None,
         ozone_ext_config=None, ozone_source="analytical", aerosol_config=fake._aerosol_config,
         aerosol_active=False, aerosol_lw_active=False, dtype=p_s.dtype)

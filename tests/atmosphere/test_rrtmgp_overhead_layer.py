@@ -107,7 +107,7 @@ def test_flag_reaches_every_lane(monkeypatch):
     monkeypatch.setattr(rrtmgp_mod.RRTMGP, "from_legoesm_config",
                         classmethod(_spy))
     with pytest.raises(RuntimeError, match="spy"):
-        physics_pipeline._build_rrtmgp_radiation_fn(ExperimentConfig(
+        physics_pipeline.build_rrtmgp_radiation_fn(ExperimentConfig(
             radiation="rrtmgp", rrtmgp_overhead_layer=True))
     assert seen["cfg"].overhead_layer is True
     # MPAS / duo-column and spectral lanes build RRTMGPConfig inline in the

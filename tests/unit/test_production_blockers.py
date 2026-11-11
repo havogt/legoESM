@@ -228,12 +228,12 @@ class TestCloudRadiationCoupling:
     """RRTMGP radiation function must accept cloud optical properties."""
 
     def test_rrtmgp_builder_creates_fn_with_cloud_params(self):
-        """_build_rrtmgp_radiation_fn must return fn accepting cloud fields."""
-        from legoesm.driver.physics_pipeline import _build_rrtmgp_radiation_fn
+        """build_rrtmgp_radiation_fn must return fn accepting cloud fields."""
+        from legoesm.driver.physics_pipeline import build_rrtmgp_radiation_fn
         import inspect
 
         ec = ExperimentConfig(radiation="rrtmgp", cloud_scheme="sundqvist")
-        rad_fn = _build_rrtmgp_radiation_fn(ec)
+        rad_fn = build_rrtmgp_radiation_fn(ec)
 
         # Check signature includes cloud parameters
         sig = inspect.signature(rad_fn)
@@ -245,7 +245,7 @@ class TestCloudRadiationCoupling:
 
     def test_include_clouds_flag_set_when_cloud_scheme_active(self):
         """RRTMGPConfig.include_clouds must be True when cloud_scheme != 'none'."""
-        from legoesm.driver.physics_pipeline import _build_rrtmgp_radiation_fn
+        from legoesm.driver.physics_pipeline import build_rrtmgp_radiation_fn
         from legoesm.atmosphere.physics.radiation.rrtmgp_radiation import RRTMGPConfig
 
         # With cloud scheme
@@ -255,8 +255,8 @@ class TestCloudRadiationCoupling:
 
         # We can't easily inspect the captured config inside the closure,
         # but we verify the function builds without error
-        fn_clouds = _build_rrtmgp_radiation_fn(ec_clouds)
-        fn_clear = _build_rrtmgp_radiation_fn(ec_clear)
+        fn_clouds = build_rrtmgp_radiation_fn(ec_clouds)
+        fn_clear = build_rrtmgp_radiation_fn(ec_clear)
         assert fn_clouds is not None
         assert fn_clear is not None
 
@@ -268,7 +268,7 @@ class TestCloudRadiationCoupling:
 class TestRRTMGPUseScanRouting:
     """ExperimentConfig.rrtmgp_use_scan must flow into the RRTMGP wrapper.
 
-    Hardcoding ``use_scan=True`` in ``_build_rrtmgp_radiation_fn`` forces
+    Hardcoding ``use_scan=True`` in ``build_rrtmgp_radiation_fn`` forces
     ``jax.lax.scan`` on every backend, which launches one kernel per
     atmospheric layer on GPU.  The builder must honour the ExperimentConfig
     field so GPU deployments can pick the unrolled Python for-loop path
@@ -305,7 +305,7 @@ class TestRRTMGPUseScanRouting:
             "legoesm.atmosphere.physics.radiation.rrtmgp.rrtmgp.RRTMGP.from_legoesm_config",
             return_value=MagicMock(),
         ):
-            _ = pp._build_rrtmgp_radiation_fn(ec)
+            _ = pp.build_rrtmgp_radiation_fn(ec)
 
         return captured
 

@@ -578,6 +578,44 @@ def create_icon_model(config: ExperimentConfig):
         spmd=spmd,
         finite_halo_padding=config.dycore.icon_finite_halo_padding,
         land=_icon_land_coupling(config, multi_rank),
+        radiation=_icon_radiation_coupling(config, multi_rank),
+    )
+
+
+def _icon_mesh(config: ExperimentConfig):
+    from legoesm.grids.factory import create_grid
+
+    return create_grid("icon", grid_file=config.grid.grid_file)
+
+
+def _icon_radiation_coupling(config: ExperimentConfig, multi_rank: bool):
+    rad = config.icon.radiation
+    if rad is None:
+        return None
+    if multi_rank:
+        raise ValueError("icon.radiation runs on one rank only so far")
+    import jax.numpy as jnp
+
+    from legoesm.atmosphere.dynamics.gcm import icon4py_jax
+    from legoesm.driver import icon_radiation
+    from legoesm.forcing.time_utils import day_to_calendar
+
+    mesh = _icon_mesh(config)
+    n = mesh.nCells
+    dt_days = float(config.dycore.dt) / 86400.0
+
+    def clock(steps_done):
+        # the insolation of the step that starts after ``steps_done`` steps
+        return day_to_calendar(float(config.start_day) + steps_done * dt_days)
+
+    return icon4py_jax.IconRadiationCoupling(
+        step=icon_radiation.radiation_step(rad, mesh.latCell, mesh.lonCell),
+        ocean_surface={
+            "T_sfc": jnp.full(n, config.icon.surface.sea_surface_temperature_K),
+            "albedo": jnp.full(n, rad.albedo_ocean),
+            "emissivity": jnp.full(n, rad.sfc_emissivity),
+        },
+        clock=clock,
     )
 
 
@@ -591,14 +629,13 @@ def _icon_land_coupling(config: ExperimentConfig, multi_rank: bool):
 
     from legoesm.atmosphere.dynamics.gcm import icon4py_jax
     from legoesm.driver import icon_land
-    from legoesm.grids.factory import create_grid
 
-    mesh = create_grid("icon", grid_file=config.grid.grid_file)
+    mesh = _icon_mesh(config)
     mask = icon_land.patch_mask(mesh, land)
-    if mask.any():
+    if mask.any() and config.icon.radiation is None:
         raise ValueError(
-            f"icon.land: {int(mask.sum())} cells of the patch are land, and the ICON lane has no "
-            "radiation yet (step 3.x): legoESM land without sunlight is refused until then"
+            f"icon.land: {int(mask.sum())} cells of the patch are land and icon.radiation is "
+            "off: legoESM land without sunlight is refused"
         )
     return icon4py_jax.IconLandCoupling(
         mask=mask,

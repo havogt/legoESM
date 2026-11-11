@@ -3963,7 +3963,7 @@ def rrtmgp_config_from_experiment(config, **lane_fields):
     )
 
 
-def _build_rrtmgp_radiation_fn(config):
+def build_rrtmgp_radiation_fn(config):
     """Build a JIT-compiled RRTMGP radiation wrapper from config."""
     from legoesm.atmosphere.physics.radiation.rrtmgp.rrtmgp import RRTMGP
     from legoesm.atmosphere.physics.radiation.solar import (
@@ -4142,8 +4142,8 @@ _RADIATION_BUILDERS: dict[str, callable] = {
     "ecrad_ifs": _build_ecrad_ifs_radiation_fn,  # MPAS lane only; refuses here
     "none": _build_none_radiation_fn,  # explicit zero-radiation (was silently rrtmgp)
     "gray": _build_gray_radiation_fn,
-    "rrtmgp": _build_rrtmgp_radiation_fn,
-    "rrtmg": _build_rrtmgp_radiation_fn,  # common alias
+    "rrtmgp": build_rrtmgp_radiation_fn,
+    "rrtmg": build_rrtmgp_radiation_fn,  # common alias
 }
 
 

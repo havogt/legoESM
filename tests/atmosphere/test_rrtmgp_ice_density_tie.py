@@ -89,7 +89,7 @@ def test_backend_passes_cloud_config_density():
 def test_pipeline_rrtmgp_fn_forwards_cloud_density(monkeypatch):
     import legoesm.atmosphere.physics.radiation.rrtmgp.rrtmgp as rrtmgp_mod
     from legoesm.driver.config import ExperimentConfig
-    from legoesm.driver.physics_pipeline import _build_rrtmgp_radiation_fn
+    from legoesm.driver.physics_pipeline import build_rrtmgp_radiation_fn
 
     seen = {}
 
@@ -100,7 +100,7 @@ def test_pipeline_rrtmgp_fn_forwards_cloud_density(monkeypatch):
 
     monkeypatch.setattr(rrtmgp_mod.RRTMGP, "from_legoesm_config",
                         classmethod(lambda cls, cfg: _Spy()))
-    rad_fn, _ = _build_rrtmgp_radiation_fn(ExperimentConfig(radiation="rrtmgp"))
+    rad_fn, _ = build_rrtmgp_radiation_fn(ExperimentConfig(radiation="rrtmgp"))
     ncol, nlev = 2, 2
     p_half = jnp.broadcast_to(jnp.array([1e4, 5e4, 1e5]), (ncol, nlev + 1))
     with jax.disable_jit(), pytest.raises(_Reached):

@@ -85,7 +85,7 @@ def test_pipeline_direct_albedo_matches_cesm_coupler(echo_solver):
     eo = earth_orbit()
     assert (eo.eccentricity, eo.obliquity_deg, eo.long_perihelion_deg) == (
         orbit["eccentricity"], orbit["obliquity_deg"], orbit["long_perihelion_deg"])
-    rad_fn, _ = pp._build_rrtmgp_radiation_fn(_cfg())
+    rad_fn, _ = pp.build_rrtmgp_radiation_fn(_cfg())
     T = jnp.full((1, NLEV), 250.0)
     p_half = jnp.asarray([[1.0e4, 4.0e4, 7.0e4, 1.0e5]])
     p_full = 0.5 * (p_half[:, 1:] + p_half[:, :-1])

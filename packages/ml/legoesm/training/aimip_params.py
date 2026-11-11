@@ -1592,7 +1592,7 @@ def make_aimip_classical_spectral_physics(
         # → clear-sky radiation and a dead gradient through the trained
         # Xu-Randall cloud knobs (the cloud_config below exists precisely to
         # make cloud-radiation coupling trainable end-to-end).  Mirrors
-        # ``physics_pipeline._build_rrtmgp_radiation_fn`` and is required by
+        # ``physics_pipeline.build_rrtmgp_radiation_fn`` and is required by
         # the ``make_radiation_physics`` gate-consistency check.
         # G-point compile/memory tradeoff (exploit g-point sparsity):
         #  * gpoint_checkpoint=True, batch=0 (legacy): scan+checkpoint per

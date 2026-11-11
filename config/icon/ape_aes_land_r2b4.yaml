@@ -1,6 +1,6 @@
 # legoESM ICON lane: the APE_AES aquaplanet with a legoESM slab-land patch (0-45 N, 0-60 E), R02B04.
 # Every setting explicit: the ICON blocks are APE_AES's, the land block is legoESM's slab defaults
-# with SimpleSEB. Refused until the lane has radiation (step 3.x), unless the patch holds no cell.
+# with SimpleSEB; radiation is legoESM's RRTMGP, clear sky, with legoESM's defaults.
 # The grid file is machine-specific:
 #   legoesm run config/icon/ape_aes_land_r2b4.yaml --set grid.grid_file=<path to icon_grid_0013_R02B04_R.nc>
 model:
@@ -26,7 +26,7 @@ hardware:
   precision:
     mode: fp64
 radiation:
-  scheme: none
+  scheme: rrtmgp
 physics:
   convection: none
   microphysics: icon_muphys
@@ -285,3 +285,18 @@ icon:
       large_yeager_neutral_width: 0.001
       large_yeager_dthv_width: 0.01
       large_yeager_cd_cutoff_width: 0.5
+  radiation:
+    diurnal_cycle: false
+    S_0: 1361.0
+    orbital_insolation: false
+    co2_ppmv: 415.0
+    ch4_ppbv: 1900.0
+    n2o_ppbv: 332.0
+    ozone_source: standard
+    albedo_ocean: 0.06
+    sfc_emissivity: 0.97
+    rrtmgp_use_scan: null
+    rrtmgp_gpoint_batch_size: 16
+    rrtmgp_gpoint_checkpoint: true
+    rrtmgp_column_chunk_size: 0
+    rrtmgp_overhead_layer: false

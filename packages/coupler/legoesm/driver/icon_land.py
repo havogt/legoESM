@@ -22,16 +22,17 @@ def patch_mask(mesh, land) -> np.ndarray:
             & (lon >= land.patch_lon_min_deg) & (lon < land.patch_lon_max_deg))
 
 
-def initial_land_state(land, T_lowest) -> LandState:  # noqa: N803
+def initial_land_state(land, T_lowest):  # noqa: N803
     """The soil at the lowest-level air temperature, the bucket at ``bucket_init_frac`` of its
-    capacity, no snow."""
+    capacity, no snow; and the surface radiation first sees: the soil temperature and the
+    slab's albedo and emissivity."""
     t_soil = jnp.asarray(T_lowest)
 
     def field(name, data, units):
         return Field(data, name=name, dims=("column",), units=units)
 
     zero = jnp.zeros_like(t_soil)
-    return LandState(
+    state = LandState(
         T_soil=field("T_soil", t_soil, "K"),
         W_bucket=field("W_bucket", zero + land.bucket_init_frac * land.slab.W_max, "kg/m2"),
         snow_depth=field("snow_depth", zero, "kg/m2"),
@@ -39,6 +40,9 @@ def initial_land_state(land, T_lowest) -> LandState:  # noqa: N803
         # an array from the start, so the step's input and output pytrees agree
         runoff=zero,
     )
+    surface = {"T_sfc": t_soil, "albedo": zero + land.slab.albedo_land,
+               "emissivity": zero + land.slab.emissivity_land}
+    return state, surface
 
 
 def lowest_level(col) -> dict:
@@ -61,18 +65,20 @@ def lowest_level(col) -> dict:
 
 
 def land_step(land, lat, dt: float):
-    """``step(col, muphys_diagnostics, land_state) -> (SurfaceFluxState arrays, land_state)``
-    on every cell; the caller keeps ICON's own fluxes off the patch. ``lat`` [rad]."""
+    """``step(col, muphys_diagnostics, land_state, radiation) -> (SurfaceFluxState arrays,
+    land_state, land_surface)`` on every cell; the caller keeps ICON's own fluxes off the
+    patch. ``radiation`` is None or the surface's ``sw_down``/``lw_down``; ``land_surface`` is
+    what radiation sees of the land next step. ``lat`` [rad]."""
     lat = jnp.asarray(lat)
 
-    def step(col, muphys, state):
+    def step(col, muphys, state, radiation):
         low = lowest_level(col)
         frozen = sum(muphys[k].ndarray[:, -1] for k in ("ps", "pi", "pg"))
         zero = jnp.zeros_like(low["T"])
         forcing = AtmToSurface(
-            # no radiation before the lane's step 3.x; a run with land cells is refused
-            sw_down=zero,
-            lw_down=zero,
+            # without radiation a run with land cells is refused
+            sw_down=zero if radiation is None else radiation["sw_down"],
+            lw_down=zero if radiation is None else radiation["lw_down"],
             precip_total=muphys["pr"].ndarray[:, -1] + frozen,
             precip_snow=frozen,
             T_lowest=low["T"],
@@ -84,7 +90,7 @@ def land_step(land, lat, dt: float):
             rho_lowest=low["rho"],
             cos_zenith=zero,
             co2_ppmv=zero,
-            has_radiation=zero,
+            has_radiation=zero if radiation is None else zero + 1.0,
             has_precipitation=zero + 1.0,
             z_lowest=low["z"],
         )
@@ -98,6 +104,8 @@ def land_step(land, lat, dt: float):
             tau_y=response.tau_y,
             T_lowest=low["T"],
         )
-        return fluxes, new
+        surface = {"T_sfc": response.T_rad, "albedo": response.albedo,
+                   "emissivity": response.emissivity}
+        return fluxes, new, surface
 
     return step

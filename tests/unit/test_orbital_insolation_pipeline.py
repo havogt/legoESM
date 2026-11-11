@@ -124,7 +124,7 @@ def test_rrtmgp_sw_flux_tracks_per_step_irradiance(monkeypatch):
     gas-optics tables."""
     import legoesm.atmosphere.physics.radiation.rrtmgp.rrtmgp as rrtmgp_mod
     from legoesm.atmosphere.physics.radiation.output import RadiationOutput
-    from legoesm.driver.physics_pipeline import _build_rrtmgp_radiation_fn
+    from legoesm.driver.physics_pipeline import build_rrtmgp_radiation_fn
 
     class _FakeSolver:
         def solve_columns(self, *, T, **kw):
@@ -141,7 +141,7 @@ def test_rrtmgp_sw_flux_tracks_per_step_irradiance(monkeypatch):
                         classmethod(lambda cls, cfg: _FakeSolver()))
 
     cfg = ExperimentConfig(radiation="rrtmgp", diurnal_cycle=True)
-    rad_fn = _build_rrtmgp_radiation_fn(cfg)
+    rad_fn = build_rrtmgp_radiation_fn(cfg)
 
     ncol, nlev = 2, 2
     T = jnp.full((ncol, nlev), 260.0)

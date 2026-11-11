@@ -172,6 +172,28 @@ class IconLandConfig(NamedTuple):
     slab: Any
 
 
+class IconRadiationConfig(NamedTuple):
+    """legoESM's RRTMGP on ICON's columns (``radiation == 'rrtmgp'``), clear sky: the
+    settings legoESM's RRTMGP builder reads, under their ExperimentConfig names. Ozone is an
+    inline profile (``ozone_source``); there is no aerosol."""
+
+    diurnal_cycle: bool
+    S_0: float
+    orbital_insolation: bool
+    co2_ppmv: float
+    ch4_ppbv: float
+    n2o_ppbv: float
+    ozone_source: str
+    #: the ocean surface's albedo and emissivity; land takes its own from the land model
+    albedo_ocean: float
+    sfc_emissivity: float
+    rrtmgp_use_scan: bool | None
+    rrtmgp_gpoint_batch_size: int
+    rrtmgp_gpoint_checkpoint: bool
+    rrtmgp_column_chunk_size: int
+    rrtmgp_overhead_layer: bool
+
+
 class IconConfig(NamedTuple):
     """The ICON lane's settings; the physics blocks are None when that family is off, and
     ``land`` is None on a surface without legoESM land."""
@@ -185,6 +207,7 @@ class IconConfig(NamedTuple):
     tmx: IconTmxConfig | None
     surface: IconSurfaceConfig | None
     land: IconLandConfig | None
+    radiation: IconRadiationConfig | None
 
 
 __param_spec__ = {
@@ -307,6 +330,18 @@ __param_spec__ = {
             "patch_lon_max_deg": "case geometry, not a parameter",
             "bucket_init_frac": "initial condition, not a parameter",
             "wind_speed_min_m_s": "numerics floor",
+        },
+        "params": {},
+    },
+    "IconRadiationConfig": {
+        "scheme_key": "icon_radiation",
+        "excluded": {
+            "S_0": "radiative forcing, exposure deferred",
+            "co2_ppmv": "radiative forcing, exposure deferred",
+            "ch4_ppbv": "radiative forcing, exposure deferred",
+            "n2o_ppbv": "radiative forcing, exposure deferred",
+            "albedo_ocean": "surface property, exposure deferred",
+            "sfc_emissivity": "surface property, exposure deferred",
         },
         "params": {},
     },

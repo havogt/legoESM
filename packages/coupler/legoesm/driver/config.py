@@ -5120,7 +5120,8 @@ class ExperimentConfig(NamedTuple):
             errors.append(f"precision={self.precision!r}: the ICON lane runs fp64 only")
         families = {"microphysics": "icon_muphys", "turbulence": "icon_tmx",
                     "surface_bulk_scheme": "icon_fixed_heat_fluxes"}
-        for key in ("radiation", "cloud_scheme", "convection", "gravity_wave_drag",
+        families = {**families, "radiation": "rrtmgp"}
+        for key in ("cloud_scheme", "convection", "gravity_wave_drag",
                     "physics_parameterization", *families):
             value = getattr(self, key)
             allowed = ("none", families[key]) if key in families else ("none",)
@@ -5129,11 +5130,12 @@ class ExperimentConfig(NamedTuple):
                               "(set it explicitly)")
         if self.icon is not None:
             for key, block in (("microphysics", "muphys"), ("turbulence", "tmx"),
-                               ("surface_bulk_scheme", "surface")):
+                               ("surface_bulk_scheme", "surface"), ("radiation", "radiation")):
                 if (getattr(self, key) == families[key]) != (getattr(self.icon, block) is not None):
                     errors.append(f"{key}={getattr(self, key)!r} and icon.{block} disagree: "
                                   f"the block is given exactly when {key}={families[key]!r}")
             errors += self._icon_land_errors()
+            errors += self._icon_radiation_errors()
             dyc = self.icon.dycore
             if dyc.divdamp_order == "combined" and dyc.apply_extra_second_order_divdamp:
                 errors.append("icon.dycore: divdamp_order='combined' with "
@@ -5152,6 +5154,19 @@ class ExperimentConfig(NamedTuple):
             errors.append("output.output_dir is required on the ICON lane")
         if o.checkpoint_days:
             errors.append("output.checkpoint_days: the ICON lane writes no checkpoints yet")
+        return errors
+
+    def _icon_radiation_errors(self) -> list[str]:
+        rad = self.icon.radiation
+        if rad is None:
+            return []
+        errors = []
+        if None in (self.icon.muphys, self.icon.tmx, self.icon.surface):
+            errors.append("icon.radiation needs icon.muphys, icon.tmx and icon.surface: it is "
+                          "one more physics group of the per-group step")
+        if rad.ozone_source not in ("standard", "analytical", "mls", "none"):
+            errors.append(f"icon.radiation.ozone_source={rad.ozone_source!r}: the ICON lane "
+                          "takes an inline profile (standard, analytical, mls, none)")
         return errors
 
     def _icon_land_errors(self) -> list[str]:
@@ -5742,7 +5757,7 @@ def _icon_config_from_dict(d: dict | None, *, strict: bool):
         icon_config.IconJWConfig, icon_config.IconDiffusionConfig,
         icon_config.IconTracerAdvectionConfig, icon_config.IconMuphysConfig,
         icon_config.IconTmxConfig, icon_config.IconSurfaceConfig,
-        icon_config.IconLandConfig), strict=True)}
+        icon_config.IconLandConfig, icon_config.IconRadiationConfig), strict=True)}
     problems = []
     if strict:
         problems += [f"icon.{k}" for k in d if k not in block_types]

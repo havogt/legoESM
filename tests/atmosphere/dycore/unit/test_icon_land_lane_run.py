@@ -30,11 +30,15 @@ def _config(deck, out, **sets):
     return config.to_experiment_config()
 
 
-def test_the_patch_is_refused_until_the_lane_has_radiation(tmp_path):
+NO_RADIATION = {"radiation.scheme": "none", "icon.radiation": None}
+
+
+def test_land_cells_without_radiation_are_refused(tmp_path):
     from legoesm.driver import component_factory
 
-    with pytest.raises(ValueError, match=r"\d+ cells of the patch are land.*step 3\.x"):
-        component_factory.create_icon_model(_config("ape_aes_land_r2b4", tmp_path))
+    with pytest.raises(ValueError, match=r"\d+ cells of the patch are land and icon.radiation"):
+        component_factory.create_icon_model(
+            _config("ape_aes_land_r2b4", tmp_path, **NO_RADIATION))
 
 
 def test_the_land_step_on_icon_columns(tmp_path):
@@ -54,8 +58,9 @@ def test_the_land_step_on_icon_columns(tmp_path):
     low = icon_land.lowest_level(col)
     assert (np.asarray(low["z"]) > 0.0).all()
     mesh = create_grid("icon", grid_file=GRID_FILE)
-    land_state = icon_land.initial_land_state(land, low["T"])
-    fluxes, new = icon_land.land_step(land, mesh.latCell, static.dtime)(col, muphys, land_state)
+    land_state, _ = icon_land.initial_land_state(land, low["T"])
+    fluxes, new, _ = icon_land.land_step(land, mesh.latCell, static.dtime)(
+        col, muphys, land_state, None)
     template = jax_api.surface(static, jax_api.surface_input(static, col))
     assert set(fluxes) == {f.name for f in dataclasses.fields(template)}
     for name, value in fluxes.items():
@@ -78,7 +83,8 @@ def _run(cfg):
 
 
 def test_a_patch_without_cells_reproduces_ape_aes_bitwise(tmp_path):
-    empty = {"icon.land.patch_lat_min_deg": 0.0, "icon.land.patch_lat_max_deg": 0.0}
+    empty = {"icon.land.patch_lat_min_deg": 0.0, "icon.land.patch_lat_max_deg": 0.0,
+             **NO_RADIATION}
     driver, with_land_path = _run(_config("ape_aes_land_r2b4", tmp_path / "land", **empty))
     assert driver.model.land is not None and not driver.model.land.mask.any()
     _, reference = _run(_config("ape_aes_r2b4", tmp_path / "ape"))
@@ -97,7 +103,7 @@ def test_land_cells_change_the_state(tmp_path):
     from legoesm.driver import icon_land
     from legoesm.grids.factory import create_grid
 
-    cfg = _config("ape_aes_land_r2b4", tmp_path / "land")
+    cfg = _config("ape_aes_land_r2b4", tmp_path / "land", **NO_RADIATION)
     land = cfg.icon.land
     mesh = create_grid("icon", grid_file=GRID_FILE)
     coupling = icon4py_jax.IconLandCoupling(

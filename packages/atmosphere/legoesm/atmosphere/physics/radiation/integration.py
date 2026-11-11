@@ -1239,7 +1239,7 @@ def _validate_cloud_gate(radiation_config: RadiationConfig) -> None:
     cloud optics on every standalone dycore path, including ones whose tracer
     extractor would then pass partial/bare condensate and run optically inert),
     this RAISES so the caller must make the two consistent at the config
-    source.  The coupled pipeline (``physics_pipeline._build_rrtmgp_radiation_fn``)
+    source.  The coupled pipeline (``physics_pipeline.build_rrtmgp_radiation_fn``)
     and the matrix runner already derive ``include_clouds`` from
     ``cloud_scheme`` before constructing the config, so they never trip this;
     direct ``RadiationConfig`` builders (AIMIP, ``combined.py``) must do the

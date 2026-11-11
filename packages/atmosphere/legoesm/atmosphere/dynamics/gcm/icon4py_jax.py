@@ -61,7 +61,7 @@ def surface_flux_state(template, arrays: dict):
     return dataclasses.replace(template, **{k: field(k, v) for k, v in arrays.items()})
 
 
-def _physics_groups(static, state, surface_fluxes):
+def _physics_groups(static, state, surface_fluxes, radiation=None):
     from icon4py.model.driver import jax_api
 
     state = jax_api.dynamics_step(static, state)
@@ -70,12 +70,20 @@ def _physics_groups(static, state, surface_fluxes):
     col = jax_api.apply_column_tendencies(
         col, tend_muphys, static.dtime, recompute_virtual_temperature=False
     )
-    fluxes, extra = surface_fluxes(col, muphys_diagnostics)
+    groups = [tend_muphys]
+    radiation_out = None
+    if radiation is not None:
+        tend_radiation, radiation_out = radiation(col)
+        col = jax_api.apply_column_tendencies(
+            col, tend_radiation, static.dtime, recompute_virtual_temperature=False
+        )
+        groups.append(tend_radiation)
+    fluxes, extra = surface_fluxes(col, muphys_diagnostics, radiation_out)
     tend_tmx, _ = jax_api.tmx(static, col, fluxes)
     col = jax_api.apply_column_tendencies(
         col, tend_tmx, static.dtime, recompute_virtual_temperature=False
     )
-    tendencies = jax_api.sum_column_tendencies(tend_muphys, tend_tmx)
+    tendencies = jax_api.sum_column_tendencies(*groups, tend_tmx)
     return jax_api.phy2dyn(static, state, col, tendencies), extra
 
 
@@ -88,33 +96,69 @@ def per_group_time_step(static, state, *, surface):
     from icon4py.model.driver import jax_api
 
     state, _ = _physics_groups(
-        static, state, lambda col, _: (surface(static, jax_api.surface_input(static, col)), None)
+        static,
+        state,
+        lambda col, _, __: (surface(static, jax_api.surface_input(static, col)), None),
     )
     return state
 
 
-def per_group_time_step_with_land(static, state, land_state, *, land_step, mask):
-    """:func:`per_group_time_step` with ICON's own surface off ``mask`` and legoESM land on it:
-    ``land_step(col, muphys_diagnostics, land_state)`` gives the land's flux arrays and its new
-    state, after muphys and before tmx. Returns the new ICON state and land state."""
+def per_group_time_step_coupled(static, state, carry, clock, *, land, radiation):
+    """:func:`per_group_time_step` with legoESM radiation after muphys and legoESM land between
+    it and tmx; ``land``/``radiation`` None leave that group to ICON (or out). ``carry`` holds
+    the land state and the land surface radiation saw; ``clock`` is the step's
+    ``(day_of_year, seconds_of_day)``. Returns the new ICON state and carry."""
     from icon4py.model.driver import jax_api
 
-    def surface_fluxes(col, muphys_diagnostics):
-        icon = jax_api.surface(static, jax_api.surface_input(static, col))
-        land, new_land_state = land_step(col, muphys_diagnostics, land_state)
-        merged = {k: jnp.where(mask, v, getattr(icon, k).ndarray) for k, v in land.items()}
-        return surface_flux_state(icon, merged), new_land_state
+    def radiative_surface(col):
+        surface = dict(radiation.ocean_surface)
+        if land is not None:
+            surface = {k: jnp.where(land.mask, carry["land_surface"][k], v)
+                       for k, v in surface.items()}
+        return surface
 
-    return _physics_groups(static, state, surface_fluxes)
+    def radiation_group(col):
+        heating, out = radiation.step(col, radiative_surface(col), *clock)
+        tend = jax_api.ColumnTendencies(
+            temperature=type(col.temperature).from_array(heating, domain=col.temperature.domain)
+        )
+        return tend, {"sw_down": out.sw_flux_down[:, -1], "lw_down": out.lw_flux_down[:, -1]}
+
+    def surface_fluxes(col, muphys_diagnostics, radiation_out):
+        icon = jax_api.surface(static, jax_api.surface_input(static, col))
+        if land is None:
+            return icon, carry
+        arrays, land_state, land_surface = land.step(
+            col, muphys_diagnostics, carry["land"], radiation_out
+        )
+        merged = {k: jnp.where(land.mask, v, getattr(icon, k).ndarray) for k, v in arrays.items()}
+        return surface_flux_state(icon, merged), {"land": land_state, "land_surface": land_surface}
+
+    return _physics_groups(
+        static, state, surface_fluxes, None if radiation is None else radiation_group
+    )
 
 
 class IconLandCoupling(NamedTuple):
     """legoESM land on the ICON lane: ``mask`` (bool per cell, the grid file's order),
-    ``initial_state(T_lowest)`` and ``step(col, muphys_diagnostics, land_state)``."""
+    ``initial_state(T_lowest) -> (land_state, land_surface)`` and
+    ``step(col, muphys_diagnostics, land_state, radiation) -> (flux arrays, land_state,
+    land_surface)``; ``land_surface`` is what radiation sees of the land (``T_sfc``, ``albedo``,
+    ``emissivity``), ``radiation`` None or the surface's downward SW/LW."""
 
     mask: np.ndarray
     initial_state: Callable
     step: Callable
+
+
+class IconRadiationCoupling(NamedTuple):
+    """legoESM radiation on the ICON lane: ``step(col, surface, day_of_year, seconds_of_day) ->
+    (dT/dt, output)``, ``ocean_surface`` (``T_sfc``, ``albedo``, ``emissivity`` per cell) and
+    ``clock(steps_done) -> (day_of_year, seconds_of_day)`` of the step that follows."""
+
+    step: Callable
+    ocean_surface: dict
+    clock: Callable
 
 
 class Icon4pyJaxDycore:
@@ -134,6 +178,7 @@ class Icon4pyJaxDycore:
         spmd: bool = False,
         finite_halo_padding: bool = False,
         land: IconLandCoupling | None = None,
+        radiation: IconRadiationCoupling | None = None,
     ) -> None:
         from icon4py.model.common import dimension as dims
         from icon4py.model.common import model_backends
@@ -151,11 +196,12 @@ class Icon4pyJaxDycore:
         self._field_dim = {"vn": dims.EdgeDim}
         self.uses_jax_api = not multi_rank and jit_time_step and (all(groups) or not any(groups))
         self.land = land
-        self.land_state = None
-        if land is not None and not (self.uses_jax_api and all(groups)):
+        self.radiation = radiation
+        self.carry = None
+        if (land is not None or radiation is not None) and not (self.uses_jax_api and all(groups)):
             raise ValueError(
-                "legoESM land on the ICON lane needs one rank, the jitted step and all of "
-                "muphys, surface and tmx"
+                "legoESM land or radiation on the ICON lane needs one rank, the jitted step and "
+                "all of muphys, surface and tmx"
             )
         if self.uses_jax_api:
             import jax
@@ -165,15 +211,15 @@ class Icon4pyJaxDycore:
                 pathlib.Path(grid_file), config
             )
             self._vertical_cfl_threshold = float(config.driver.vertical_cfl_threshold)
-            if land is not None:
-                col = jax_api.dyn2phy(self._api_static, self._api_state)
-                self.land_state = land.initial_state(col.temperature.ndarray[:, -1])
+            if land is not None or radiation is not None:
+                self.carry = {}
+                if land is not None:
+                    col = jax_api.dyn2phy(self._api_static, self._api_state)
+                    land_state, land_surface = land.initial_state(col.temperature.ndarray[:, -1])
+                    self.carry = {"land": land_state, "land_surface": land_surface}
+                    land = land._replace(mask=jnp.asarray(land.mask))
                 self._api_step = jax.jit(
-                    functools.partial(
-                        per_group_time_step_with_land,
-                        land_step=land.step,
-                        mask=jnp.asarray(land.mask),
-                    )
+                    functools.partial(per_group_time_step_coupled, land=land, radiation=radiation)
                 )
             else:
                 self._api_step = jax.jit(
@@ -233,9 +279,12 @@ class Icon4pyJaxDycore:
 
     def step(self) -> None:
         if self.uses_jax_api:
-            if self.land is not None:
-                self._api_state, self.land_state = self._api_step(
-                    self._api_static, self._api_state, self.land_state
+            if self.carry is not None:
+                clock = (0.0, 0.0)
+                if self.radiation is not None:
+                    clock = self.radiation.clock(self.steps_done)
+                self._api_state, self.carry = self._api_step(
+                    self._api_static, self._api_state, self.carry, jnp.asarray(clock)
                 )
             else:
                 self._api_state = self._api_step(self._api_static, self._api_state)

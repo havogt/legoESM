@@ -1,6 +1,6 @@
 """--radiation-column-chunk round-trips through the run_coupled CLI.
 
-The coupled radiation path (``physics_pipeline._build_rrtmgp_radiation_fn``)
+The coupled radiation path (``physics_pipeline.build_rrtmgp_radiation_fn``)
 honours ``RRTMGPConfig.column_chunk_size``, so the coupled runner must be able
 to set it. ``main()`` wires ``rrtmgp_column_chunk_size=args.radiation_column_chunk``
 into the driver ``ExperimentConfig``; here we lock the parser default (0 = off,

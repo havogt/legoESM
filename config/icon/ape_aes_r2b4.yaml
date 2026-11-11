@@ -149,3 +149,4 @@ icon:
     kinematic_latent_heat_flux_m_s: 0.0
     sea_surface_temperature_K: 303.15
   land: null
+  radiation: null
