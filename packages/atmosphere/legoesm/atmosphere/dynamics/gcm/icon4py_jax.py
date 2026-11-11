@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import functools
 import pathlib
+from collections.abc import Callable
+from typing import NamedTuple
 
 import jax.numpy as jnp
 import numpy as np
@@ -59,6 +61,24 @@ def surface_flux_state(template, arrays: dict):
     return dataclasses.replace(template, **{k: field(k, v) for k, v in arrays.items()})
 
 
+def _physics_groups(static, state, surface_fluxes):
+    from icon4py.model.driver import jax_api
+
+    state = jax_api.dynamics_step(static, state)
+    col = jax_api.dyn2phy(static, state)
+    tend_muphys, muphys_diagnostics = jax_api.muphys(static, col)
+    col = jax_api.apply_column_tendencies(
+        col, tend_muphys, static.dtime, recompute_virtual_temperature=False
+    )
+    fluxes, extra = surface_fluxes(col, muphys_diagnostics)
+    tend_tmx, _ = jax_api.tmx(static, col, fluxes)
+    col = jax_api.apply_column_tendencies(
+        col, tend_tmx, static.dtime, recompute_virtual_temperature=False
+    )
+    tendencies = jax_api.sum_column_tendencies(tend_muphys, tend_tmx)
+    return jax_api.phy2dyn(static, state, col, tendencies), extra
+
+
 def per_group_time_step(static, state, *, surface):
     """One time step: dynamics, then muphys, ``surface`` and tmx applied in turn on the columns.
 
@@ -67,18 +87,34 @@ def per_group_time_step(static, state, *, surface):
     """
     from icon4py.model.driver import jax_api
 
-    state = jax_api.dynamics_step(static, state)
-    col = jax_api.dyn2phy(static, state)
-    tend_muphys, _ = jax_api.muphys(static, col)
-    col = jax_api.apply_column_tendencies(
-        col, tend_muphys, static.dtime, recompute_virtual_temperature=False
+    state, _ = _physics_groups(
+        static, state, lambda col, _: (surface(static, jax_api.surface_input(static, col)), None)
     )
-    fluxes = surface(static, jax_api.surface_input(static, col))
-    tend_tmx, _ = jax_api.tmx(static, col, fluxes)
-    col = jax_api.apply_column_tendencies(
-        col, tend_tmx, static.dtime, recompute_virtual_temperature=False
-    )
-    return jax_api.phy2dyn(static, state, col, jax_api.sum_column_tendencies(tend_muphys, tend_tmx))
+    return state
+
+
+def per_group_time_step_with_land(static, state, land_state, *, land_step, mask):
+    """:func:`per_group_time_step` with ICON's own surface off ``mask`` and legoESM land on it:
+    ``land_step(col, muphys_diagnostics, land_state)`` gives the land's flux arrays and its new
+    state, after muphys and before tmx. Returns the new ICON state and land state."""
+    from icon4py.model.driver import jax_api
+
+    def surface_fluxes(col, muphys_diagnostics):
+        icon = jax_api.surface(static, jax_api.surface_input(static, col))
+        land, new_land_state = land_step(col, muphys_diagnostics, land_state)
+        merged = {k: jnp.where(mask, v, getattr(icon, k).ndarray) for k, v in land.items()}
+        return surface_flux_state(icon, merged), new_land_state
+
+    return _physics_groups(static, state, surface_fluxes)
+
+
+class IconLandCoupling(NamedTuple):
+    """legoESM land on the ICON lane: ``mask`` (bool per cell, the grid file's order),
+    ``initial_state(T_lowest)`` and ``step(col, muphys_diagnostics, land_state)``."""
+
+    mask: np.ndarray
+    initial_state: Callable
+    step: Callable
 
 
 class Icon4pyJaxDycore:
@@ -97,6 +133,7 @@ class Icon4pyJaxDycore:
         process_props=None,
         spmd: bool = False,
         finite_halo_padding: bool = False,
+        land: IconLandCoupling | None = None,
     ) -> None:
         from icon4py.model.common import dimension as dims
         from icon4py.model.common import model_backends
@@ -113,6 +150,13 @@ class Icon4pyJaxDycore:
         groups = [config.muphys is not None, config.surface is not None, config.tmx is not None]
         self._field_dim = {"vn": dims.EdgeDim}
         self.uses_jax_api = not multi_rank and jit_time_step and (all(groups) or not any(groups))
+        self.land = land
+        self.land_state = None
+        if land is not None and not (self.uses_jax_api and all(groups)):
+            raise ValueError(
+                "legoESM land on the ICON lane needs one rank, the jitted step and all of "
+                "muphys, surface and tmx"
+            )
         if self.uses_jax_api:
             import jax
             from icon4py.model.driver import jax_api
@@ -121,11 +165,22 @@ class Icon4pyJaxDycore:
                 pathlib.Path(grid_file), config
             )
             self._vertical_cfl_threshold = float(config.driver.vertical_cfl_threshold)
-            self._api_step = jax.jit(
-                functools.partial(per_group_time_step, surface=jax_api.surface)
-                if all(groups)
-                else jax_api.time_step
-            )
+            if land is not None:
+                col = jax_api.dyn2phy(self._api_static, self._api_state)
+                self.land_state = land.initial_state(col.temperature.ndarray[:, -1])
+                self._api_step = jax.jit(
+                    functools.partial(
+                        per_group_time_step_with_land,
+                        land_step=land.step,
+                        mask=jnp.asarray(land.mask),
+                    )
+                )
+            else:
+                self._api_step = jax.jit(
+                    functools.partial(per_group_time_step, surface=jax_api.surface)
+                    if all(groups)
+                    else jax_api.time_step
+                )
             self.driver = None
             self.owned_global_index = {
                 dims.CellDim: np.arange(self._api_state.prognostic["rho"].ndarray.shape[0]),
@@ -178,7 +233,12 @@ class Icon4pyJaxDycore:
 
     def step(self) -> None:
         if self.uses_jax_api:
-            self._api_state = self._api_step(self._api_static, self._api_state)
+            if self.land is not None:
+                self._api_state, self.land_state = self._api_step(
+                    self._api_static, self._api_state, self.land_state
+                )
+            else:
+                self._api_state = self._api_step(self._api_static, self._api_state)
             self._api_state.prognostic["vn"].ndarray.block_until_ready()
             self.steps_done += 1
             cfl = self._api_state.carry["diagnostic"]["max_vertical_cfl"]

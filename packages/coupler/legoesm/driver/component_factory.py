@@ -577,6 +577,33 @@ def create_icon_model(config: ExperimentConfig):
         process_props=process_props,
         spmd=spmd,
         finite_halo_padding=config.dycore.icon_finite_halo_padding,
+        land=_icon_land_coupling(config, multi_rank),
+    )
+
+
+def _icon_land_coupling(config: ExperimentConfig, multi_rank: bool):
+    land = config.icon.land
+    if land is None:
+        return None
+    if multi_rank:
+        raise ValueError("icon.land runs on one rank only so far")
+    import functools
+
+    from legoesm.atmosphere.dynamics.gcm import icon4py_jax
+    from legoesm.driver import icon_land
+    from legoesm.grids.factory import create_grid
+
+    mesh = create_grid("icon", grid_file=config.grid.grid_file)
+    mask = icon_land.patch_mask(mesh, land)
+    if mask.any():
+        raise ValueError(
+            f"icon.land: {int(mask.sum())} cells of the patch are land, and the ICON lane has no "
+            "radiation yet (step 3.x): legoESM land without sunlight is refused until then"
+        )
+    return icon4py_jax.IconLandCoupling(
+        mask=mask,
+        initial_state=functools.partial(icon_land.initial_land_state, land),
+        step=icon_land.land_step(land, mesh.latCell, float(config.dycore.dt)),
     )
 
 
