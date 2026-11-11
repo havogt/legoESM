@@ -557,15 +557,17 @@ _EDGE_TOL = 1e-12
 
 
 def _inside_quads(p, quads, centres):
-    """``p`` ``(m, 3)`` points, ``quads`` ``(m, 4, 3)`` spherically convex
-    quads with great-circle edges (gnomonic cells: straight lines on the
-    face plane, any orientation), ``centres`` ``(m, 3)`` a point strictly
-    inside each: True where ``p`` is on the centre's side of all 4 edges
+    """``p`` ``(m, 3)`` points, ``quads`` ``(m, k, 3)`` spherically convex
+    k-gons in ring order with great-circle edges (gnomonic quads: straight
+    lines on the face plane, any orientation; ICON triangles), ``centres``
+    ``(m, 3)`` a point strictly inside each: True where ``p`` is on the
+    centre's side of all k edges
     (a point on an edge belongs to both cells; the first claim wins).
     A centre ON an edge plane would make that edge unconstrained: error."""
     ok = np.ones(p.shape[0], dtype=bool)
-    for k in range(4):
-        nrm = np.cross(quads[:, k, :], quads[:, (k + 1) % 4, :])
+    n_corners = quads.shape[1]
+    for k in range(n_corners):
+        nrm = np.cross(quads[:, k, :], quads[:, (k + 1) % n_corners, :])
         side_c = np.einsum("ij,ij->i", nrm, centres)
         if np.any(np.abs(side_c) <= _EDGE_TOL):
             raise ValueError("_inside_quads: a cell centre lies on one of its edges")
@@ -634,8 +636,8 @@ def bin_latlon_to_cells(lat_src_deg, lon_src_deg, fields, cell_lat_rad, cell_lon
     """Area-weighted cell means of regular lat-lon ``fields`` (each
     ``(n_lat, n_lon)``) on the cells of a grid: every source cell belongs
     to ONE cell and contributes its own spherical area (first order in the
-    source resolution).  Ownership: ``corners_xyz`` ``(n_cells, 4, 3)`` +
-    ``nb`` -> exact spherical quads (cubed-sphere); ``axes_1d`` ``(lat_c,
+    source resolution).  Ownership: ``corners_xyz`` ``(n_cells, k, 3)`` +
+    ``nb`` -> exact spherical k-gons (cubed-sphere quads, ICON triangles); ``axes_1d`` ``(lat_c,
     lon_c[, lat_edges])`` radians -> exact lat-lon boxes; neither -> the NEAREST centre
     (exact for a Voronoi mesh).  Returns a list of ``(n_cells,)`` arrays.
     A cell no source cell lands in is an error (the source must be finer);
@@ -744,22 +746,23 @@ def masked_diffusion(q, f_land, nb, area, *, passes: int = 4,
     return q
 
 
-def _corner_neighbours(corners_xyz, k_max: int = 8):
-    """``(k_max, n)`` neighbour table from shared corners: two cells are
-    neighbours when they share a corner point (edge AND corner neighbours,
-    enough for the quad ownership search)."""
-    n = corners_xyz.shape[0]
+def _corner_neighbours(corners_xyz):
+    """``(K, n)`` neighbour table from shared corners, ``K`` the largest
+    neighbour count (``-1`` pads): two cells are neighbours when they share
+    a corner point (edge AND corner neighbours, enough for the polygon
+    ownership search).  A triangle has ~12 of them."""
+    n, n_corners = corners_xyz.shape[:2]
     key = np.round(corners_xyz.reshape(-1, 3), 9)
     _, inv = np.unique(key, axis=0, return_inverse=True)
-    inv = inv.reshape(n, 4)
+    inv = inv.reshape(n, n_corners)
     by_corner = {}
     for c in range(n):
         for v in inv[c]:
             by_corner.setdefault(int(v), []).append(c)
-    nb = np.full((k_max, n), -1, dtype=np.int64)
-    for c in range(n):
-        s = sorted({d for v in inv[c] for d in by_corner[int(v)] if d != c})
-        nb[:min(k_max, len(s)), c] = s[:k_max]
+    sets = [sorted({d for v in inv[c] for d in by_corner[int(v)] if d != c}) for c in range(n)]
+    nb = np.full((max(len(s) for s in sets), n), -1, dtype=np.int64)
+    for c, s in enumerate(sets):
+        nb[:len(s), c] = s
     return nb
 
 
@@ -782,8 +785,10 @@ def grid_terrain_product(grid, lat_src_deg, lon_src_deg, elev_m, *,
     c_lat = getattr(grid, "cornerLat", None)
     if c_lat is not None:
         # cells with great-circle edges and known corners (the duo column
-        # mesh): exact quad ownership, neighbours for the boundary search
-        own["corners_xyz"] = _xyz(c_lat, grid.cornerLon).reshape(-1, 4, 3)
+        # mesh's quads, ICON's triangles): exact polygon ownership,
+        # neighbours for the boundary search
+        n_corners = np.asarray(c_lat).shape[-1]
+        own["corners_xyz"] = _xyz(c_lat, grid.cornerLon).reshape(-1, n_corners, 3)
         own["nb"] = _corner_neighbours(own["corners_xyz"])
     elif np.asarray(grid.grid_lat).ndim == 2:
         lat_v = getattr(grid, "lat_v", None)

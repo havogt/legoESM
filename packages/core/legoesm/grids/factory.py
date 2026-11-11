@@ -21,7 +21,8 @@ Two construction modes, both behind the one entry:
 
 * **file-backed** global grid (ocean OMIP): ``tripole`` loads a NEMO mesh from
   ``grid_file=<mesh_mask/domcfg .nc>`` (``resolution`` is ignored) ->
-  ``create_tripole_grid``.
+  ``create_tripole_grid``; ``icon`` reads an ICON grid file through icon4py
+  (``grid_file=``) and returns its cells as a ``ColumnMesh``.
 
 Per-grid options (``radius``, ``lloyd_iterations``, ``n_lon`` ...) pass through as
 keyword arguments.  The doubly-periodic ``plane`` box (LES / SCM) is NOT here: it
@@ -92,6 +93,17 @@ def create_grid(grid_type: str, resolution: int | None = None, **kwargs: Any):
         from legoesm.grids.tripole import create_tripole_grid
 
         return create_tripole_grid(grid_file, **kwargs)
+
+    if grid_type == "icon":
+        grid_file = kwargs.pop("grid_file", None)
+        if grid_file is None or resolution is not None or kwargs:
+            raise ValueError(
+                "icon is a file-backed grid: pass grid_file=<ICON grid .nc> only "
+                f"(got resolution={resolution!r}, extra keywords {sorted(kwargs)})."
+            )
+        from legoesm.grids.icon_mesh import build_icon_column_mesh
+
+        return build_icon_column_mesh(grid_file)
 
     if grid_type == "fesom":
         # FESOM2 unstructured triangular mesh (the fesom_jax dycore).  Like

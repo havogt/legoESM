@@ -40,8 +40,8 @@ class ColumnMesh(NamedTuple):
     grid_shape_2d: tuple
     lat: jax.Array
     lon: jax.Array
-    #: cell corners ``(nCells, 4)`` [rad] in ring order: the terrain
-    #: product's exact quad ownership
+    #: cell corners ``(nCells, k)`` [rad] in ring order (k = 4 for quads,
+    #: 3 for ICON triangles): the terrain product's exact polygon ownership
     cornerLat: jax.Array
     cornerLon: jax.Array
     #: the NATIVE grid's planet radius [m] and rotation rate [1/s] (its
