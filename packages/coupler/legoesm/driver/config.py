@@ -5133,6 +5133,7 @@ class ExperimentConfig(NamedTuple):
                 if (getattr(self, key) == families[key]) != (getattr(self.icon, block) is not None):
                     errors.append(f"{key}={getattr(self, key)!r} and icon.{block} disagree: "
                                   f"the block is given exactly when {key}={families[key]!r}")
+            errors += self._icon_land_errors()
             dyc = self.icon.dycore
             if dyc.divdamp_order == "combined" and dyc.apply_extra_second_order_divdamp:
                 errors.append("icon.dycore: divdamp_order='combined' with "
@@ -5151,6 +5152,28 @@ class ExperimentConfig(NamedTuple):
             errors.append("output.output_dir is required on the ICON lane")
         if o.checkpoint_days:
             errors.append("output.checkpoint_days: the ICON lane writes no checkpoints yet")
+        return errors
+
+    def _icon_land_errors(self) -> list[str]:
+        land = self.icon.land
+        if land is None:
+            return []
+        errors = []
+        if None in (self.icon.muphys, self.icon.tmx, self.icon.surface):
+            errors.append("icon.land needs icon.muphys, icon.tmx and icon.surface: legoESM land "
+                          "takes muphys's precipitation, and the cells off the patch keep ICON's "
+                          "own surface")
+        if not (-90.0 <= land.patch_lat_min_deg <= land.patch_lat_max_deg <= 90.0):
+            errors.append("icon.land: need -90 <= patch_lat_min_deg <= patch_lat_max_deg <= 90")
+        if not (0.0 <= land.patch_lon_min_deg <= land.patch_lon_max_deg <= 360.0):
+            errors.append("icon.land: need 0 <= patch_lon_min_deg <= patch_lon_max_deg <= 360")
+        if not 0.0 <= land.bucket_init_frac <= 1.0:
+            errors.append("icon.land.bucket_init_frac must be in [0, 1]")
+        if not land.wind_speed_min_m_s > 0.0:
+            errors.append("icon.land.wind_speed_min_m_s must be positive")
+        if land.slab is not None and land.slab.carbon.scheme != "none":
+            errors.append(f"icon.land.slab.carbon.scheme={land.slab.carbon.scheme!r}: the ICON "
+                          "lane passes the land no CO2 or day of year (none only)")
         return errors
 
     def validate(self) -> list[str]:
@@ -5645,11 +5668,67 @@ from legoesm.driver.run_config_yaml import (  # noqa: E402
     RENAMED_CONFIG_KEYS, migrate_renamed_keys)
 
 
+def _slab_land_to_dict(cfg) -> dict:
+    from legoesm.land.surface_scheme import SimpleSEBConfig
+
+    out = {}
+    for k, v in cfg._asdict().items():
+        if k == "surface_scheme":
+            if not isinstance(v, SimpleSEBConfig):
+                raise ValueError(f"icon.land.slab.surface_scheme: {type(v).__name__} "
+                                 "is not supported on the ICON lane (simple_seb only)")
+            out[k] = {"simple_seb": v._asdict()}
+        else:
+            out[k] = _slab_land_to_dict(v) if hasattr(v, "_asdict") else v
+    return out
+
+
 def _icon_config_to_dict(icon) -> dict | None:
     if icon is None:
         return None
-    return {block: (None if sub is None else sub._asdict())
-            for block, sub in icon._asdict().items()}
+    out = {block: (None if sub is None else sub._asdict())
+           for block, sub in icon._asdict().items()}
+    if icon.land is not None:
+        out["land"]["slab"] = _slab_land_to_dict(icon.land.slab)
+    return out
+
+
+def _strict_namedtuple(cls, d, path: str, problems: list, *, strict: bool):
+    """``cls`` from ``d`` with every field given: nested NamedTuple fields recurse, a field
+    whose default is None must be null, and a scalar must have its default's type."""
+    from legoesm.land.config import LandConfig
+    from legoesm.land.surface_scheme import SimpleSEBConfig
+
+    if not isinstance(d, dict):
+        problems.append(f"{path} (not a mapping)")
+        return None
+    n_problems = len(problems)
+    missing = [k for k in cls._fields if k not in d]
+    problems += [f"{path}.{k} (missing)" for k in missing]
+    if strict:
+        problems += [f"{path}.{k}" for k in d if k not in cls._fields]
+    if missing:
+        return None
+    values = {}
+    for k in cls._fields:
+        v, default, where = d[k], cls._field_defaults.get(k), f"{path}.{k}"
+        if cls is LandConfig and k == "surface_scheme":
+            if not isinstance(v, dict) or list(v) != ["simple_seb"]:
+                problems.append(f"{where} (only {{simple_seb: {{}}}} on the ICON lane)")
+                continue
+            values[k] = _strict_namedtuple(SimpleSEBConfig, v["simple_seb"], f"{where}.simple_seb",
+                                           problems, strict=strict)
+        elif hasattr(default, "_asdict"):
+            values[k] = _strict_namedtuple(type(default), v, where, problems, strict=strict)
+        elif default is None:
+            if v is not None:
+                problems.append(f"{where} (only null is supported on the ICON lane)")
+            values[k] = None
+        elif type(v) is not type(default):
+            problems.append(f"{where} ({type(v).__name__}, expected {type(default).__name__})")
+        else:
+            values[k] = v
+    return cls(**values) if len(problems) == n_problems else None
 
 
 def _icon_config_from_dict(d: dict | None, *, strict: bool):
@@ -5662,7 +5741,8 @@ def _icon_config_from_dict(d: dict | None, *, strict: bool):
         icon_config.IconDycoreConfig, icon_config.IconVerticalConfig,
         icon_config.IconJWConfig, icon_config.IconDiffusionConfig,
         icon_config.IconTracerAdvectionConfig, icon_config.IconMuphysConfig,
-        icon_config.IconTmxConfig, icon_config.IconSurfaceConfig), strict=True)}
+        icon_config.IconTmxConfig, icon_config.IconSurfaceConfig,
+        icon_config.IconLandConfig), strict=True)}
     problems = []
     if strict:
         problems += [f"icon.{k}" for k in d if k not in block_types]
@@ -5680,7 +5760,13 @@ def _icon_config_from_dict(d: dict | None, *, strict: bool):
         if strict:
             problems += [f"icon.{name}.{k}" for k in sub if k not in cls._fields]
         if not missing:
-            blocks[name] = cls(**{k: sub[k] for k in cls._fields})
+            values = {k: sub[k] for k in cls._fields}
+            if cls is icon_config.IconLandConfig:
+                from legoesm.land.config import LandConfig
+
+                values["slab"] = _strict_namedtuple(LandConfig, sub["slab"], "icon.land.slab",
+                                                    problems, strict=strict)
+            blocks[name] = cls(**values)
     if problems:
         raise ValueError("icon block: " + ", ".join(problems)
                          + ". The ICON lane has no defaults: every setting is explicit.")

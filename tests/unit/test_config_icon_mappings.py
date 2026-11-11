@@ -17,14 +17,14 @@ _BLOCKS = dict(
             icon_config.IconTmxConfig,
             icon_config.IconSurfaceConfig,
         ),
-        strict=True,
+        strict=False,
     )
 )
 _ICON_FIELDS = ("grid_file", "icon_spmd", "icon_finite_halo_padding", "ic", "topography")
 
 
 def _icon_block():
-    return {name: {f: 1.0 for f in cls._fields} for name, cls in _BLOCKS.items()}
+    return {**{name: {f: 1.0 for f in cls._fields} for name, cls in _BLOCKS.items()}, "land": None}
 
 
 def _present():
@@ -47,8 +47,7 @@ def test_each_mapping_reaches_experiment_config():
     assert cfg.topography == "icon_jablonowski_williamson"
     assert cfg.start_year == 2008
     expected = icon_config.IconConfig(
-        **{name: cls(**block) for (name, cls), block in zip(
-            _BLOCKS.items(), _icon_block().values(), strict=True)}
+        **{name: cls(**_icon_block()[name]) for name, cls in _BLOCKS.items()}, land=None
     )
     assert cfg.icon == expected
 

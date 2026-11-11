@@ -25,7 +25,7 @@ import numpy as np
 PROGNOSTIC_FIELDS = ("vn", "w", "rho", "exner", "theta_v")
 
 
-def land_surface_fluxes(*, shflx, lhflx, surface_mass_flux, tau_x, tau_y, T_lowest) -> dict:
+def land_surface_fluxes(*, shflx, lhflx, surface_mass_flux, tau_x, tau_y, T_lowest) -> dict:  # noqa: N803
     """ICON's ``SurfaceFluxState`` arrays from a legoESM land response: legoESM's fluxes are
     positive up and its stress is the drag on the air, ICON's are positive down (into the
     surface). The heat flux the land loses is the internal energy the air gains; the vapour

@@ -12,9 +12,9 @@ if "ICON4PY_TEST_DATA_PATH" not in os.environ:
     pytest.skip("ICON4PY_TEST_DATA_PATH is not set", allow_module_level=True)
 
 import jax.numpy as jnp  # noqa: E402
+from legoesm.atmosphere.dynamics.gcm import icon4py_jax  # noqa: E402
 
 from legoesm import constants  # noqa: E402
-from legoesm.atmosphere.dynamics.gcm import icon4py_jax  # noqa: E402
 
 pytestmark = pytest.mark.slow
 

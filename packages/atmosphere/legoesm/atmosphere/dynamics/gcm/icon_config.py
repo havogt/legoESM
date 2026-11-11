@@ -7,7 +7,7 @@ fields hold the lower-case name of icon4py's enum member.
 
 from __future__ import annotations
 
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 
 class IconDycoreConfig(NamedTuple):
@@ -153,8 +153,28 @@ class IconSurfaceConfig(NamedTuple):
     sea_surface_temperature_K: float
 
 
+class IconLandConfig(NamedTuple):
+    """legoESM slab land on the cells of a lat/lon box, ICON's own surface elsewhere.
+
+    A cell is land when its centre has ``patch_lat_min_deg <= lat < patch_lat_max_deg`` and
+    ``patch_lon_min_deg <= lon < patch_lon_max_deg``, longitude in [0, 360). ``slab`` is the
+    land package's ``LandConfig``; this package does not import it.
+    """
+
+    patch_lat_min_deg: float
+    patch_lat_max_deg: float
+    patch_lon_min_deg: float
+    patch_lon_max_deg: float
+    #: initial bucket water as a fraction of the bucket capacity ``slab.W_max``
+    bucket_init_frac: float
+    #: wind-speed floor of the land's bulk fluxes
+    wind_speed_min_m_s: float
+    slab: Any
+
+
 class IconConfig(NamedTuple):
-    """The ICON lane's settings; the physics blocks are None when that family is off."""
+    """The ICON lane's settings; the physics blocks are None when that family is off, and
+    ``land`` is None on a surface without legoESM land."""
 
     dycore: IconDycoreConfig
     vertical: IconVerticalConfig
@@ -164,6 +184,7 @@ class IconConfig(NamedTuple):
     muphys: IconMuphysConfig | None
     tmx: IconTmxConfig | None
     surface: IconSurfaceConfig | None
+    land: IconLandConfig | None
 
 
 __param_spec__ = {
@@ -274,6 +295,18 @@ __param_spec__ = {
             "kinematic_sensible_heat_flux_K_m_s": "exposure deferred (2026-11-10)",
             "kinematic_latent_heat_flux_m_s": "exposure deferred (2026-11-10)",
             "sea_surface_temperature_K": "exposure deferred (2026-11-10)",
+        },
+        "params": {},
+    },
+    "IconLandConfig": {
+        "scheme_key": "icon_land",
+        "excluded": {
+            "patch_lat_min_deg": "case geometry, not a parameter",
+            "patch_lat_max_deg": "case geometry, not a parameter",
+            "patch_lon_min_deg": "case geometry, not a parameter",
+            "patch_lon_max_deg": "case geometry, not a parameter",
+            "bucket_init_frac": "initial condition, not a parameter",
+            "wind_speed_min_m_s": "numerics floor",
         },
         "params": {},
     },
