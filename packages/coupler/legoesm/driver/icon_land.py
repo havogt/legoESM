@@ -12,6 +12,10 @@ from legoesm.core.field import Field
 from legoesm.land.slab_land import step_land_with_diagnostics
 from legoesm.land.state import LandState
 
+#: the step's land fluxes, kept with what radiation sees of the land: SW/LW down [W/m2], the
+#: turbulent heat fluxes [W/m2, up], evaporation, precipitation and runoff [kg/m2/s]
+_DIAGNOSTICS = ("sw_down", "lw_down", "shflx", "lhflx", "evaporation", "precipitation", "runoff")
+
 
 def patch_mask(mesh, land) -> np.ndarray:
     """True on the cells whose centre lies in the patch: ``min <= lat < max`` and
@@ -41,7 +45,8 @@ def initial_land_state(land, T_lowest):  # noqa: N803
         runoff=zero,
     )
     surface = {"T_sfc": t_soil, "albedo": zero + land.slab.albedo_land,
-               "emissivity": zero + land.slab.emissivity_land}
+               "emissivity": zero + land.slab.emissivity_land,
+               **{k: zero for k in _DIAGNOSTICS}}
     return state, surface
 
 
@@ -105,7 +110,11 @@ def land_step(land, lat, dt: float):
             T_lowest=low["T"],
         )
         surface = {"T_sfc": response.T_rad, "albedo": response.albedo,
-                   "emissivity": response.emissivity}
+                   "emissivity": response.emissivity,
+                   "sw_down": forcing.sw_down, "lw_down": forcing.lw_down,
+                   "shflx": response.shflx, "lhflx": response.lhflx,
+                   "evaporation": response.surface_mass_flux,
+                   "precipitation": forcing.precip_total, "runoff": new.runoff}
         return fluxes, new, surface
 
     return step
