@@ -133,6 +133,9 @@ def _slice_grid_info_to_rank(grid_info, layout, n_tile, global_ncol):
     return tuple(grid_info[int(g)]._replace(p=k + 1) for k, g in enumerate(lidx))
 
 
+from legoesm.driver.radiation_forcing import radiation_forcing_on_columns  # noqa: E402
+
+
 def _gather_flat_columns(local_arr, layout, n_tile, root_only=False):
     """Inverse of :func:`_scatter_flat_columns` — gather a rank-local
     flattened-column array ``(n_local*n*n, ...)`` back to the global
@@ -5451,13 +5454,8 @@ class ModelDriver:
         """Pre-compute ozone/aerosol/GHG fields outside JIT boundary.
 
         ``lon`` [rad] matches ``lat``; None -> :meth:`_owned_lon` (the layout
-        of :meth:`_owned_p_s_and_lat`, which every caller but spectral uses)."""
-        from legoesm.forcing.external import get_ozone_at_time
-        from legoesm.forcing.surface_utils import (
-            aerosol_layer_fields,
-            stratospheric_layer_weight,
-        )
-
+        of :meth:`_owned_p_s_and_lat`, which every caller but spectral uses).
+        The pressure-level work is :func:`radiation_forcing_on_columns`."""
         nlev = self.sigma.sigma_full.shape[0]
         shape_2d = p_s.shape
         ncol = int(np.prod(np.array(shape_2d)))
@@ -5467,112 +5465,39 @@ class ModelDriver:
         p_full_col = p_full.reshape(ncol, nlev)
         p_half_col = p_half.reshape(ncol, nlev + 1)
         lat_col = lat.reshape(ncol)
-        # Ozone is evaluated on the model levels PLUS 16 midpoints of equal
-        # pressure sub-layers above the model top (0 < p < p_top); their mean
-        # is the overhead column-mean VMR for the RRTMGP overhead layer
-        # (RRTMGPConfig.overhead_layer; unused when that is off).  The inline sources other than
-        # "mls" are pointwise in p, so the model-level values are unchanged;
-        # "mls" (gSAM layer means) is handled from the interfaces below.
-        _p_o3 = jnp.concatenate([
-            p_full_col,
-            p_half_col[:, :1] * ((jnp.arange(16) + 0.5) / 16.0),
-        ], axis=1)
-
         # Volcanic aerosol is cut at each column's WMO lapse-rate tropopause
         # diagnosed from T at this precompute (the same state snapshot as
         # ``p_s``; callers refresh daily).  ``temp`` defaults to the state's
         # grid-point T; absent or off the ``p_s`` grid -> climatological
         # tropopause.  Only when volcanic aerosol can be on (config-uniform,
         # so the SPMD gather in ``_owned_temp`` stays collective).
-        w_strat = None
+        temp_col = None
         if self._aerosol_active or self._aerosol_lw_active:
             if temp is None:
                 temp = self._owned_temp()
-            temp_col = None
             if temp is not None and tuple(temp.shape) == tuple(p_full.shape):
                 temp_col = jnp.asarray(temp).reshape(ncol, nlev)
-            w_strat = stratospheric_layer_weight(
-                p_half_col, lat_col, p_full_col, temp_col)
-
-        if self._ozone_ext_active:
-            o3_vmr = jnp.asarray(get_ozone_at_time(
-                self._ozone_ext_config, day,
-                lat_grid=lat_col, p_grid=_p_o3,
-            ))
-        else:
-            # External ozone forcing inactive — build the inline profile
-            # HERE so the radiation JIT signature stays stable (it always
-            # sees a real array).  Previously ``o3_vmr`` was initialised to
-            # zeros and threaded into the solver, which then clipped it to
-            # 1e-10 and effectively disabled stratospheric ozone heating
-            # (audit 2026-05-12 HIGH #3).
-            #
-            # Honor ``cfg.ozone_source`` (2026-07-21 audit): this precomputed
-            # array reaches the compiled radiation as ``o3_vmr_override``,
-            # which takes precedence over the backend's own
-            # ``_compute_ozone_vmr`` — so building only the "standard"
-            # profile here silently ignored ``--ozone-source analytical``/
-            # ``none`` on the cd-grid/latlon pipeline while MPAS/spectral
-            # honored them (grid-dependent physics from the same config).
-            # Reuse the backend's dispatcher for exact parity.
-            from legoesm.atmosphere.physics.radiation.integration import (
-                compute_ozone_vmr as _compute_ozone_vmr,
-            )
-            from legoesm.atmosphere.physics.radiation.config import (
-                OzoneProfileConfig,
-            )
-            if self.config.ozone_source == "mls":
-                # gSAM layer means are not pointwise in p: evaluate them on the
-                # model interfaces; the overhead layer takes gSAM's own extra
-                # layer above the model top (p_top to min(1e-4 hPa, p_top/8)).
-                # With p_top = 0 there is no overhead layer: it keeps the top
-                # model layer's value, and the extra layer's 0/0 is never formed
-                # (p_top replaced by 1 Pa only inside that branch).
-                from legoesm.atmosphere.physics.radiation.ozone_mls import (
-                    mls_ozone_layer_vmr,
-                )
-                _lay = _compute_ozone_vmr(
-                    p_full_col, lat_col, OzoneProfileConfig(source="mls"),
-                    p_half=p_half_col,
-                )
-                _ptop = p_half_col[:, 0]
-                _ph_safe = p_half_col.at[:, 0].set(jnp.where(_ptop > 0.0, _ptop, 1.0))
-                _above = jnp.where(_ptop > 0.0, mls_ozone_layer_vmr(_ph_safe)[1],
-                                   _lay[:, 0])
-                _o3_inline = jnp.concatenate(
-                    [_lay, jnp.broadcast_to(_above[:, None], (ncol, _p_o3.shape[1] - nlev))],
-                    axis=1)
-            else:
-                _o3_inline = _compute_ozone_vmr(
-                    _p_o3, lat_col,
-                    OzoneProfileConfig(source=self.config.ozone_source),
-                )
-            if _o3_inline is None:
-                # source="standard": the backend contract is o3_vmr=None →
-                # its built-in US Std Atm 1976 fit; materialize the same
-                # profile for the stable-signature override path.
-                from legoesm.atmosphere.physics.radiation.rrtmgp.rrtmgp import (
-                    standard_o3_profile,
-                )
-                _o3_inline = standard_o3_profile(_p_o3)
-            o3_vmr = jnp.asarray(_o3_inline).astype(p_s.dtype)
-        self._o3_top_vmr = jnp.mean(o3_vmr[:, nlev:], axis=1)
-        o3_vmr = o3_vmr[:, :nlev]
-
         # Radiation and the droplet proxy read the aerosol at each column's
         # own longitude, as CAM's prescribed aerosol reaches radiation
         # (tracer_data.F90 bilinear lon/lat lininterp).
         lon_col = (jnp.asarray(self._owned_lon() if lon is None else lon)
                    .reshape(ncol) if self._aerosol_active else None)
-        aerosol_od, _ccn_aod, self._aerosol_lw_od = aerosol_layer_fields(
-            self._aerosol_config, day, lat_col, p_half_col, w_strat,
-            active=self._aerosol_active, lw_active=self._aerosol_lw_active,
-            dtype=p_s.dtype, lon_col=lon_col)
-        if _ccn_aod is not None:
-            self._aerosol_ccn_aod = _ccn_aod
+        forcing = radiation_forcing_on_columns(
+            day, p_full_col, p_half_col, lat_col, lon_col, temp_col,
+            ozone_ext_config=self._ozone_ext_config if self._ozone_ext_active else None,
+            ozone_source=self.config.ozone_source,
+            aerosol_config=self._aerosol_config,
+            aerosol_active=self._aerosol_active,
+            aerosol_lw_active=self._aerosol_lw_active,
+            dtype=p_s.dtype,
+        )
+        self._o3_top_vmr = forcing.o3_top_vmr
+        self._aerosol_lw_od = forcing.aerosol_lw_od
+        if forcing.aerosol_ccn_aod is not None:
+            self._aerosol_ccn_aod = forcing.aerosol_ccn_aod
 
         ghg_vmr = self.radiation_ghg_vmr(day)
-        return o3_vmr, aerosol_od, ghg_vmr
+        return forcing.o3_vmr, forcing.aerosol_od, ghg_vmr
 
     def radiation_ghg_vmr(self, day):
         """GHG mole fractions radiation uses on ``day`` (None = fixed config gases)."""
