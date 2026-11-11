@@ -79,7 +79,7 @@ def main(argv=None) -> dict:
                               text=True).stdout.strip(),
         "start": _atmosphere_totals(model, area), "hours": [],
     }
-    worst_seb, worst_water = 0.0, 0.0
+    worst_seb, worst_water, worst_seb_snow_free, snow_max, snow_cells = 0.0, 0.0, 0.0, 0.0, 0
     for step in range(1, args.steps + 1):
         before = None
         if mask.any():
@@ -96,6 +96,13 @@ def main(argv=None) -> dict:
             water = water_residual(before[1], np.asarray(land.W_bucket.data)[mask], before[2],
                                    np.asarray(land.snow_depth.data)[mask], cur, dt)
             worst_seb = max(worst_seb, float(np.max(np.abs(seb))))
+            snow_new = np.asarray(land.snow_depth.data)[mask]
+            # the slab's storage also loses the snow-melt energy, which the residual leaves out
+            snowy = (before[2] > 0.0) | (snow_new > 0.0)
+            if (~snowy).any():
+                worst_seb_snow_free = max(worst_seb_snow_free, float(np.max(np.abs(seb[~snowy]))))
+            snow_max = max(snow_max, float(snow_new.max()))
+            snow_cells = max(snow_cells, int(snowy.sum()))
             worst_water = max(worst_water, float(np.max(np.abs(water))))
         if step % args.every == 0:
             hour = {"step": step, **_atmosphere_totals(model, area)}
@@ -111,6 +118,9 @@ def main(argv=None) -> dict:
     record["finite"] = {k: bool(np.isfinite(v).all()) for k, v in prognostics.items()}
     record["max_abs_land_seb_residual_W_m2"] = worst_seb
     record["max_abs_land_water_residual_kg_m2"] = worst_water
+    record["max_abs_land_seb_residual_snow_free_W_m2"] = worst_seb_snow_free
+    record["max_snow_kg_m2"] = snow_max
+    record["max_snowy_land_cells"] = snow_cells
     with open(args.out, "w") as fh:
         json.dump(record, fh, indent=1)
     return record
