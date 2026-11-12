@@ -88,6 +88,8 @@ def build_config(grid_file, out, days: int):
         rad_update_steps=int(RADIATION_S / DT_S),
         dataset="analytical",
         use_multilayer_land=False,
+        # ZM's land/ocean autoconversion split has no land to read on an aquaplanet
+        zm_land_fraction="none",
         ozone_forcing="inline",
         ghg_forcing="constant",
         aerosol_forcing="off",
