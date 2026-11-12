@@ -2,6 +2,7 @@
 the k-corner generalisation, and triangles own every source point."""
 
 import hashlib
+import platform
 
 import jax
 
@@ -12,10 +13,13 @@ import pytest  # noqa: E402
 from legoesm.grids import topography  # noqa: E402
 
 # sha256 of (z_s, f_land) from grid_terrain_product, recorded on 01064d0808 (4-corner code)
-GOLDEN = {
+GOLDEN_BY_MACHINE = {"x86_64": {
     "duo": "6e7b58b997dd0ce0e628e76b690c916bbb116ab18bf31e7d304729a73d8c7927",
     "latlon": "7d2246e3cdc00686f7c4bf29af429587a994024818ab0b7625f37180b120d181",
-}
+}}
+# a sha256 of float results is platform-specific (fused multiply-add, libm): the goldens
+# were recorded on x86_64; elsewhere the test cannot run
+GOLDEN = GOLDEN_BY_MACHINE.get(platform.machine(), {})
 
 
 def _elevation():

@@ -2,6 +2,7 @@
 now a sigma wrapper around the pressure-level core, gives the same bits as before the split."""
 
 import hashlib
+import platform
 
 import jax
 
@@ -19,14 +20,17 @@ from tests.unit.test_aerosol_band_ccn import (  # noqa: E402
 )
 
 # sha256 of every output of the precompute, recorded on a5480ee18c (before the split)
-GOLDEN = {
+GOLDEN_BY_MACHINE = {"x86_64": {
     "standard": "826c66d8e0236a8b98e7f91696139290869c768653588e3c8f20b3f3267b447d",
     "analytical": "8ae86ee7caf2b4dd56c4db92f9d50a5f679aa4eefb3bab4adfbb768655cbfd2f",
     "mls": "5257e1a1b8f615072d5dea9b562c626468f7f4c13b05e4ff8c8b80d3f81482d3",
     "none": "7a9ae1b7c9f119df9f9b1511be1ed7ced3842fa6947303b8989d4b5bd4289d9a",
     "aerosol": "a4990619366014c0bac45244377e95bc05d4f025ea8a88ef0a8751ba4b8f381a",
     "aerosol_state_tropopause": "11930034b6d3e46c9a173eece039566c90a1deb224ff236a1d0783bf8c6f896d",
-}
+}}
+# a sha256 of float results is platform-specific (fused multiply-add, libm): the goldens
+# were recorded on x86_64; elsewhere the test cannot run
+GOLDEN = GOLDEN_BY_MACHINE.get(platform.machine(), {})
 
 
 def _digest(fake, o3_and_aer):
