@@ -74,7 +74,7 @@ def _build_tiny_cubed_sphere_case():
         CDGridPrimitiveEquationModel, CDGridPrimitiveEquationConfig,
         hydrostatic_to_fv3,
     )
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
 
     grid = create_cubed_sphere(N_GRID)
     cdgrid = create_cubed_sphere_cdgrid(grid)

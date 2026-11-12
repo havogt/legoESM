@@ -108,7 +108,7 @@ Notes:
   It uses `uv pip install` (not `uv run`/`uv sync`) for the override so it isn't
   silently reverted to the locked CPU build.
 - `run_bench.sh` exports `PYTHONPATH=<repo root>` because the bench driver
-  imports `tests.test_cases.baroclinic_wave`; without it every run silently
+  imports `legoesm.atmosphere.forcing.idealized.baroclinic_wave`; without it every run silently
   reports `FAILED: No module named 'tests'`.
 
 ### Cheap smoke test (4-chip slice: v6e-4)

@@ -129,7 +129,7 @@ def test_perturbed_false_really_changes_the_initial_condition():
     absent in the other, and that the steady state is zonally symmetric."""
     from legoesm.grids.latlon import create_latlon_grid
     from legoesm.grids.vertical import create_sigma_coordinate
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_latlon
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_latlon
 
     grid = create_latlon_grid(36, 72)
     sigma = create_sigma_coordinate(10)

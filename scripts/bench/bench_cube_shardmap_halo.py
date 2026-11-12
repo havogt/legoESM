@@ -179,7 +179,7 @@ def _build_cube_model(n_grid: int, n_lev: int, dt: float):
     from legoesm.grids.cubed_sphere_cdgrid import create_cubed_sphere_cdgrid
     from legoesm.grids.vertical import create_sigma_coordinate
 
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
 
     grid = create_cubed_sphere(n_grid)
     cdgrid = create_cubed_sphere_cdgrid(grid)

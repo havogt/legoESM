@@ -8,7 +8,8 @@ The physics settings are run_amip's for config/amip/amip_production.yaml. Replac
 dycore and ICON blocks (those of config/icon/ape_column_r2b4.yaml), the cadences (physics every
 ICON step, radiation hourly, as on the MPAS deck), and what an aquaplanet without the deck's
 data files needs (analytic SST/SIC, no land, inline ozone, constant greenhouse gases and solar
-constant, no prescribed aerosol).
+constant, no prescribed aerosol). Both lanes start from the DCMIP-2016 baroclinic wave with the
+same water vapour profile.
 """
 
 from __future__ import annotations
@@ -74,6 +75,8 @@ def _aquaplanet(amip, out, days, start_year, start_day):
         aerosol_forcing="off",
         nc_from_aerosol=False,
         solar_source="constant",
+        ic="dcmip2016_baroclinic_wave",
+        rh_init=0.7,
         output=OutputConfig(output_dir=str(out), diag_days=1.0),
     )
 
@@ -107,7 +110,6 @@ def build_config(grid_file, out, days: int, lane: str = "icon"):
             model_type="nonhydrostatic", discretization="icon", dt=DT_S, icon_spmd=False,
             icon_finite_halo_padding=False, column_lane=True, energy_fixer=False),
         icon=icon.icon,
-        ic=icon.ic,
         physics_update_steps=1,
         rad_update_steps=int(RADIATION_S / DT_S),
     )

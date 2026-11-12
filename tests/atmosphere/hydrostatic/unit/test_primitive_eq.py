@@ -736,7 +736,7 @@ class TestTemperatureStability:
 
     def test_baroclinic_wave_temperature_bounds(self, grid):
         """Baroclinic wave IC should keep T within bounds over 50 steps."""
-        from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
 
         sigma_26 = create_sigma_coordinate(26)
         model = PrimitiveEquationModel(
@@ -808,7 +808,7 @@ class TestHydrostaticToFV3VectorHalo:
         from legoesm.atmosphere.dynamics.gcm.primitive_eq_cdgrid import (
             hydrostatic_to_fv3, fv3_to_hydrostatic,
         )
-        from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
 
         n = 24
         cs_grid = create_cubed_sphere(n)
@@ -845,7 +845,7 @@ class TestHydrostaticToFV3VectorHalo:
             hydrostatic_to_fv3,
         )
         from legoesm.core.operators_cdgrid import dgrid_to_cgrid, cgrid_divergence
-        from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
 
         n = 24
         cs_grid = create_cubed_sphere(n)
@@ -876,7 +876,7 @@ class TestHydrostaticToFV3VectorHalo:
             CDGridPrimitiveEquationModel, CDGridPrimitiveEquationConfig,
             hydrostatic_to_fv3, fv3_to_hydrostatic,
         )
-        from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
 
         n = 24
         cs_grid = create_cubed_sphere(n)

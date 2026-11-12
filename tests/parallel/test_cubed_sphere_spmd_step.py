@@ -49,7 +49,7 @@ class TestCubedSphereSPMDStep:
             CDGridPrimitiveEquationModel, CDGridPrimitiveEquationConfig,
             hydrostatic_to_fv3, fv3_to_hydrostatic,
         )
-        from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
 
         # dt scales with resolution to stay CFL-stable
         dt = 450.0 if n_grid <= 24 else 225.0
@@ -105,7 +105,7 @@ class TestCubedSphereSPMDStep:
             hydrostatic_to_fv3, fv3_to_hydrostatic,
         )
         from legoesm.atmosphere.forcing.idealized.held_suarez import held_suarez_forcing
-        from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
 
         n_grid, n_lev, dt = 24, 8, 450.0
         grid = create_cubed_sphere(n_grid)
@@ -253,7 +253,7 @@ class TestCubedSphereSPMDStep:
             CDGridPrimitiveEquationModel, CDGridPrimitiveEquationConfig,
             hydrostatic_to_fv3, fv3_to_hydrostatic,
         )
-        from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
         from legoesm.parallel.mesh import (
             create_device_mesh, shard_pytree,
         )
@@ -320,7 +320,7 @@ class TestCubedSphereSPMDStep:
             CDGridPrimitiveEquationModel, CDGridPrimitiveEquationConfig,
             hydrostatic_to_fv3, fv3_to_hydrostatic,
         )
-        from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
         from legoesm.parallel.mesh import (
             create_device_mesh, shard_pytree,
         )
@@ -389,7 +389,7 @@ class TestCubedSphereSPMDStep:
             CDGridPrimitiveEquationModel, CDGridPrimitiveEquationConfig,
             hydrostatic_to_fv3, fv3_to_hydrostatic,
         )
-        from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
         from legoesm.parallel.mesh import (
             create_device_mesh, shard_pytree,
         )

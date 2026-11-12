@@ -4969,10 +4969,15 @@ class ExperimentConfig(NamedTuple):
                 f"checkpoint_format must be one of {_valid_checkpoint_format}, "
                 f"got {self.output.checkpoint_format!r}"
             )
-        _valid_ic = ("default", "standard", "era5")
+        _valid_ic = ("default", "standard", "era5", "dcmip2016_baroclinic_wave")
         if d.discretization == "icon":
-            # the ICON column lane; its own checks ran in _icon_column_lane_errors
-            _valid_ic = ("icon_jablonowski_williamson",)
+            # the ICON lanes; their own checks ran in _icon_*_errors
+            _valid_ic = ("icon_jablonowski_williamson", "dcmip2016_baroclinic_wave")
+        elif self.ic == "dcmip2016_baroclinic_wave" and (
+                self.grid.grid_type != "mpas" or self.topography != "flat"):
+            errors.append("ic='dcmip2016_baroclinic_wave' is built on the MPAS lane over flat "
+                          f"topography, got grid_type={self.grid.grid_type!r}, "
+                          f"topography={self.topography!r}")
         if self.ic not in _valid_ic:
             errors.append(f"ic must be one of {_valid_ic}, got {self.ic!r}")
         if self.ic == "era5" and not self.ic_path:
@@ -5194,8 +5199,9 @@ class ExperimentConfig(NamedTuple):
         if self.physics_update_steps != 1:
             errors.append(f"physics_update_steps={self.physics_update_steps!r}: the ICON column "
                           "lane applies the physics once per ICON time step (1)")
-        if self.ic != "icon_jablonowski_williamson":
-            errors.append(f"ic={self.ic!r}: the ICON lane has 'icon_jablonowski_williamson'")
+        if self.ic not in ("icon_jablonowski_williamson", "dcmip2016_baroclinic_wave"):
+            errors.append(f"ic={self.ic!r}: the ICON column lane has "
+                          "'icon_jablonowski_williamson' and 'dcmip2016_baroclinic_wave'")
         if self.topography != "flat":
             errors.append(f"topography={self.topography!r}: the ICON column lane is flat so far")
         if d.dt != int(d.dt):

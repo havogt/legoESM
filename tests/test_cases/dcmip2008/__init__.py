@@ -2,7 +2,7 @@
 
 Each module exports per-grid initial-condition functions following the
 ``*_init`` / ``*_init_latlon`` / ``*_init_mpas`` / ``*_init_spectral``
-convention from :mod:`tests.test_cases.baroclinic_wave`.
+convention from :mod:`legoesm.atmosphere.forcing.idealized.baroclinic_wave`.
 
 References
 ----------

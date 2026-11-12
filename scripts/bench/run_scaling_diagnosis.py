@@ -250,7 +250,7 @@ def _setup_cubed_sphere(n: int, nlev: int, dt: float, precision: str,
     # Jablonowski-Williamson baroclinic wave IC (canonical helper now
     # lives under tests/test_cases — same routine the GPU/CPU scaling
     # drivers use).
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
     from legoesm.atmosphere.dynamics.gcm.primitive_eq_cdgrid import (
         CDGridPrimitiveEquationModel,
         CDGridPrimitiveEquationConfig,

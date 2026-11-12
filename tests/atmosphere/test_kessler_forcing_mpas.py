@@ -126,7 +126,7 @@ def test_moist_ic_attaches_tracers():
     # forcing has something to condense; dry default keeps tracers=None.
     pytest.importorskip("scipy")  # mesh build may pull optional deps
     from legoesm.grids.voronoi import create_voronoi_mesh
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
 
     mesh = create_voronoi_mesh(subdivision_level=2)
     sigma = create_sigma_coordinate(10, dtype=jnp.float64)

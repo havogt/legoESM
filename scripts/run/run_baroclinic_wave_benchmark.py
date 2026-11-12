@@ -66,7 +66,7 @@ from legoesm.grids.vertical import (
 from legoesm.core.field import Field
 from legoesm.core.state import HydrostaticState, FV3HydrostaticState
 from legoesm.core.operators import global_integral
-from tests.test_cases.baroclinic_wave import P0
+from legoesm.atmosphere.forcing.idealized.baroclinic_wave import P0
 from legoesm.core.cfl import (
     adaptive_hyperdiff_coeff,
     estimate_min_dx_cubed_sphere,
@@ -485,7 +485,7 @@ def main():
             SpectralPEConfig,
             spectral_pe_to_grid,
         )
-        from tests.test_cases.baroclinic_wave import baroclinic_wave_init_spectral
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_spectral
 
         grid = create_gaussian_grid(N_GRID)
         cdgrid = None
@@ -514,7 +514,7 @@ def main():
             MPASPrimitiveEquationModel,
             MPASPrimitiveEquationConfig,
         )
-        from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
         from legoesm.ocean.init_mpas import reconstruct_cell_velocity
 
         grid = _ico_mesh  # already created during dx_min computation
@@ -551,7 +551,7 @@ def main():
             hydrostatic_to_fv3,
             fv3_to_hydrostatic,
         )
-        from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
 
         grid = create_cubed_sphere(N_GRID)
         cdgrid = create_cubed_sphere_cdgrid(grid)

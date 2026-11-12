@@ -63,6 +63,31 @@ def _rate(tend, key, like):
     return jnp.zeros_like(like) if rate is None else getattr(rate, "data", rate)
 
 
+def dcmip2016_initial_state(mesh, rh):
+    """``initial_state`` for :class:`IconColumnModel`: the DCMIP-2016 baroclinic wave (with
+    its perturbation) at ICON's full-level heights, the MPAS lane's water vapour profile
+    (``rh``, ``sigma = p / p_s``) and no hydrometeors."""
+    import numpy as np
+    from icon4py.model.common.initial_condition import from_arrays
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_at_heights
+    from legoesm.thermo import initial_water_vapour
+
+    def build(z_mc):
+        z = jnp.asarray(np.asarray(z_mc))
+        lat = jnp.asarray(mesh.latCell)[:, None]
+        lon = jnp.asarray(mesh.lonCell)[:, None]
+        p, T, u = baroclinic_wave_at_heights(lat, lon, z, perturbed=True)
+        p_s = baroclinic_wave_at_heights(lat, lon, jnp.zeros_like(lat))[0]
+        qv = initial_water_vapour(T, p, p / p_s, rh)
+        zero = np.zeros(T.shape)
+        q = {sp: zero for sp in ICON_SPECIES.values()}
+        q["qv"] = np.asarray(qv)
+        return from_arrays.ColumnInitialState(
+            u=np.asarray(u), v=zero, temperature=np.asarray(T), q=q,
+            surface_pressure=np.asarray(p_s[:, 0]))
+    return build
+
+
 def _field(data, name, units):
     return Field(data=data, name=name, dims=(), units=units)
 
@@ -76,7 +101,7 @@ class IconColumnModel:
     ``ColumnMesh``, ``held_tracers`` the legoESM tracers beyond ICON's six."""
 
     def __init__(self, *, grid_file, experiment_config, mesh, config, held_tracers=(),
-                 conservative_tracer_clamp=True):
+                 conservative_tracer_clamp=True, initial_state=None):
         from icon4py.model.driver import jax_api
 
         self._api = jax_api
@@ -90,6 +115,12 @@ class IconColumnModel:
         self._static, self._initial = jax_api.init_from_grid_file(
             pathlib.Path(grid_file), experiment_config
         )
+        if initial_state is not None:
+            # ``initial_state(z_mc)``: icon4py's array state on its full-level heights, which
+            # exist only once the grid is built
+            z_mc = getattr(self._static.z_mc, "ndarray", self._static.z_mc)
+            self._static, self._initial = jax_api.init_from_grid_file(
+                pathlib.Path(grid_file), experiment_config, initial_state=initial_state(z_mc))
         self.dt = float(self._static.dtime)
         self._vertical_cfl_threshold = float(experiment_config.driver.vertical_cfl_threshold)
         self.steps_done = 0

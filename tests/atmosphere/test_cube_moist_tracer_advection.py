@@ -35,7 +35,7 @@ from legoesm.atmosphere.dynamics.gcm.primitive_eq_cdgrid import (
     hydrostatic_to_fv3,
 )
 from legoesm.atmosphere.forcing.idealized.kessler_forcing import make_kessler_forcing_cube
-from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
 
 _N = 8
 _NLEV = 12

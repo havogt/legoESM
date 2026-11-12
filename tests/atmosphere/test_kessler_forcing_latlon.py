@@ -198,7 +198,7 @@ def test_moist_ic_attaches_tracers():
     # baroclinic_wave_init_latlon(moist=True) must attach q_v/q_c/q_r so the
     # forcing has something to condense; dry default keeps tracers=None.
     from legoesm.grids.latlon import create_latlon_grid
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_latlon
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_latlon
 
     grid = create_latlon_grid(n_lat=16, n_lon=32, dtype=jnp.float64)
     sigma = create_sigma_coordinate(10, dtype=jnp.float64)

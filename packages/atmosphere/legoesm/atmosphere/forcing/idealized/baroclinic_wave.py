@@ -287,6 +287,17 @@ def exponential_perturbation(
     return u_pert
 
 
+def baroclinic_wave_at_heights(lat, lon, z, perturbed: bool = True):
+    """The state at heights ``z`` [m] (broadcasting with ``lat``/``lon`` [rad]), for a dycore
+    whose levels are heights: pressure [Pa], temperature [K] and the eastward wind [m/s]
+    (the northward wind is zero), with the perturbation when ``perturbed``."""
+    p, T = evaluate_pressure_temperature(z, lat)
+    u = compute_zonal_wind(z, lat, T)
+    if perturbed:
+        u = u + exponential_perturbation(lat, lon, z)
+    return p, T, u
+
+
 # ==============================================================================
 # Cubed-sphere initialization
 # ==============================================================================

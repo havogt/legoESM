@@ -159,7 +159,7 @@ def test_gather_voronoi_state_spmd_round_trip():
     )
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
 
     mesh = reorder_voronoi_for_sharding(
         create_voronoi_mesh(subdivision_level=3), 2, method="sfc")

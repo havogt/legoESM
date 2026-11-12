@@ -62,7 +62,7 @@ from pathlib import Path
 import jax
 import numpy as np
 
-# Repo root on the path for tests.test_cases.baroclinic_wave (the same
+# Repo root on the path for legoesm.atmosphere.forcing.idealized.baroclinic_wave (the same
 # baroclinic-wave IC the icosahedral lanes of run_levante_gpu_scaling use).
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 # Bench dir for the shared metadata module (sibling-script import pattern).
@@ -183,7 +183,7 @@ def build_model_and_state(subdivision, nlev, reorder_target, run_nd, method, *,
     # gates (small smoke scales).  The mesh itself is still global per
     # process — its SFC-partition-local construction is the open
     # remainder of #1100.
-    from tests.test_cases.baroclinic_wave import (
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import (
         build_sharded_baroclinic_wave_state_mpas,
     )
     state_sharded = build_sharded_baroclinic_wave_state_mpas(
@@ -438,7 +438,7 @@ def main() -> int:
     # sharded s0 per tests/parallel/test_mpas_partitionlocal_build.py).
     s0_global = None
     if args.parity_gate or args.check_conservation:
-        from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
         s0_global = (s0 if dev_config.n_devices <= 1
                      else baroclinic_wave_init_mpas(
                          mesh, model.sigma_coord, perturbed=True,

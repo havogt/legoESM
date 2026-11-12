@@ -104,7 +104,7 @@ def test_baroclinic_ic_converts_and_scatters_to_cgrid():
     )
 
     from legoesm import constants
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_latlon
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_latlon
 
     grid = create_latlon_grid(
         n_lat=8, radius=constants.R_earth, omega=constants.Omega,

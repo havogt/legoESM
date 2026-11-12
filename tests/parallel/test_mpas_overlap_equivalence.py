@@ -33,7 +33,7 @@ def _build_and_run(overlap: bool, n_steps=3):
     )
     from legoesm.parallel.sharded_dynamics import make_voronoi_sharded_step
     from legoesm.parallel.voronoi_partition import reorder_voronoi_for_sharding
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
 
     devices = 4
     mesh = create_voronoi_mesh(subdivision_level=5)   # 10242 cells

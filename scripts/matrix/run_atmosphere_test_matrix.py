@@ -5045,7 +5045,7 @@ def run_baroclinic(tc: TestCase, output_dir: Path, days: float, *,
         from legoesm.atmosphere.dynamics.gcm.primitive_eq_cdgrid import (
             CDGridPrimitiveEquationModel as PrimitiveEquationModel,
             CDGridPrimitiveEquationConfig as PrimitiveEquationConfig)
-        from tests.test_cases.baroclinic_wave import (
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import (
             baroclinic_wave_init)
         from legoesm.core.operators import global_integral
 
@@ -5202,7 +5202,7 @@ def run_baroclinic(tc: TestCase, output_dir: Path, days: float, *,
         from legoesm.atmosphere.dynamics.gcm.primitive_eq_latlon_cgrid import (
             CGridLatLonPrimitiveEquationModel, CGridLatLonPrimitiveEquationConfig,
             hydrostatic_to_cgrid)
-        from tests.test_cases.baroclinic_wave import (
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import (
             baroclinic_wave_init_latlon)
 
         n_lat, n_lon = (int(x) for x in tc.resolution.split("x"))
@@ -5284,7 +5284,7 @@ def run_baroclinic(tc: TestCase, output_dir: Path, days: float, *,
         from legoesm.grids.vertical import create_sigma_coordinate
         from legoesm.atmosphere.dynamics.gcm.primitive_eq_mpas import (
             MPASPrimitiveEquationModel, MPASPrimitiveEquationConfig)
-        from tests.test_cases.baroclinic_wave import (
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import (
             baroclinic_wave_init_mpas)
 
         level = int(tc.resolution.replace("ico", ""))
@@ -5363,7 +5363,7 @@ def run_baroclinic(tc: TestCase, output_dir: Path, days: float, *,
             SpectralPrimitiveEquationModel, SpectralPEConfig,
             spectral_pe_to_grid,
         )
-        from tests.test_cases.baroclinic_wave import baroclinic_wave_init_spectral
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_spectral
 
         n_max = int(tc.resolution.replace("T", ""))
         _gauss_kwargs = {}

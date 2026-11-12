@@ -82,7 +82,7 @@ def _build(*, moist: bool, reorder_for: int = 2,
         reorder_voronoi_for_sharding,
     )
 
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
 
     mesh = create_voronoi_mesh(subdivision_level=_SUBDIV)
     mesh = reorder_voronoi_for_sharding(mesh, reorder_for)

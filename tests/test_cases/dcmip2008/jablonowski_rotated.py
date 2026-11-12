@@ -30,7 +30,7 @@ We therefore:
    components at (lon, lat) using the local rotation between the two
    frames.
 
-All thermodynamic helpers from :mod:`tests.test_cases.baroclinic_wave`
+All thermodynamic helpers from :mod:`legoesm.atmosphere.forcing.idealized.baroclinic_wave`
 are reused — no analytic formulas are re-derived here.
 """
 
@@ -45,7 +45,7 @@ from legoesm.core.field import Field
 from legoesm.core.state import HydrostaticState
 from legoesm.grids.vertical import SigmaCoordinate
 
-from tests.test_cases.baroclinic_wave import (
+from legoesm.atmosphere.forcing.idealized.baroclinic_wave import (
     P0,
     compute_zonal_wind,
     evaluate_pressure_temperature,

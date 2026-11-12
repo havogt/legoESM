@@ -46,7 +46,7 @@ import os
 import sys
 from pathlib import Path
 
-# Repo root on sys.path so ``tests.test_cases.baroclinic_wave`` (the shared
+# Repo root on sys.path so ``legoesm.atmosphere.forcing.idealized.baroclinic_wave`` (the shared
 # IC used by run_levante_gpu_scaling) imports when run as a script.
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
@@ -97,7 +97,7 @@ def _build_model_and_state(n_grid: int, n_levels: int, dtype):
         CDGridPrimitiveEquationConfig,
         hydrostatic_to_fv3,
     )
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
 
     grid = create_cubed_sphere(n_grid)
     cdgrid = create_cubed_sphere_cdgrid(grid)

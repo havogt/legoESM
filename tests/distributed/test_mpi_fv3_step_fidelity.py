@@ -67,7 +67,7 @@ def _build_pe_model_and_state(n: int = 8, nlev: int = 5, **config_overrides):
         CDGridPrimitiveEquationModel,
         hydrostatic_to_fv3,
     )
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
 
     grid = create_cubed_sphere(n)
     cdgrid = create_cubed_sphere_cdgrid(grid)
@@ -266,7 +266,7 @@ class TestFV3PEStepMPIFidelity:
         from legoesm.grids.cubed_sphere import create_cubed_sphere
         from legoesm.grids.cubed_sphere_cdgrid import create_cubed_sphere_cdgrid
         from legoesm.grids.vertical import create_sigma_coordinate
-        from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
 
         n, nlev = 8, 5
         # iter-1056: set the halo backend to ``local`` BEFORE building

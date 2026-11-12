@@ -586,7 +586,11 @@ def _create_icon_column_model(config: ExperimentConfig, mesh):
     """icon4py's dynamics under legoESM's column loop (the ICON column lane): one rank,
     legoESM's tracers beyond ICON's six held by the model."""
     from legoesm.atmosphere.dynamics.gcm import icon4py_jax
-    from legoesm.atmosphere.dynamics.gcm.icon_column import ICON_SPECIES, IconColumnModel
+    from legoesm.atmosphere.dynamics.gcm.icon_column import (
+        ICON_SPECIES,
+        IconColumnModel,
+        dcmip2016_initial_state,
+    )
     from legoesm.driver.physics_pipeline import moisture_registry_for, registry_scheme_config
 
     registry = moisture_registry_for(config.microphysics, registry_scheme_config(config))
@@ -597,6 +601,8 @@ def _create_icon_column_model(config: ExperimentConfig, mesh):
         config=config,
         held_tracers=tuple(n for n in registry.names if n not in ICON_SPECIES),
         conservative_tracer_clamp=config.dycore.mpas_conservative_tracer_clamp,
+        initial_state=(dcmip2016_initial_state(mesh, config.rh_init)
+                       if config.ic == "dcmip2016_baroclinic_wave" else None),
     )
 
 

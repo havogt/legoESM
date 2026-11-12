@@ -7,7 +7,7 @@ from legoesm.grids.voronoi import create_voronoi_mesh
 from legoesm.atmosphere.dynamics.gcm.primitive_eq_mpas import MPASPrimitiveEquationModel, MPASPrimitiveEquationConfig
 from legoesm.parallel.voronoi_partition import reorder_voronoi_for_sharding
 from legoesm.parallel.mesh import create_voronoi_device_mesh, replicate_pytree
-from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
 WIDE = os.environ.get("REACH_WIDE", "0"); os.environ["LEGOESM_MPAS_WIDE_HALO"] = WIDE
 mesh = create_voronoi_mesh(subdivision_level=4); mesh = reorder_voronoi_for_sharding(mesh, 4)
 sigma = create_sigma_coordinate(8)

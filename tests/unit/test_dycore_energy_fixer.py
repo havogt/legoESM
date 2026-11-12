@@ -73,7 +73,7 @@ def mpas():
     from legoesm.core.precision import PrecisionPolicy, get_policy, set_policy
     from legoesm.grids.vertical import create_sigma_coordinate
     from legoesm.grids.voronoi import create_voronoi_mesh
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
     prev = get_policy()
     set_policy(PrecisionPolicy.fp64())
     mesh = create_voronoi_mesh(subdivision_level=2, lloyd_iterations=5)

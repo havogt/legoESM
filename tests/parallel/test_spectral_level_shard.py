@@ -48,7 +48,7 @@ class TestSpectralLevelShardEquivalence:
             SpectralPrimitiveEquationModel, SpectralPEConfig,
         )
         from legoesm.parallel.mesh import create_level_mesh, shard_pytree
-        from tests.test_cases.baroclinic_wave import baroclinic_wave_init_spectral
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_spectral
 
         # dt scales inversely with resolution to stay CFL-stable
         dt = 870.0 if n_max <= 21 else 450.0

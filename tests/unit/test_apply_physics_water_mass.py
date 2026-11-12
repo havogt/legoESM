@@ -214,7 +214,7 @@ def test_mpas_step_rain_leaves_through_ps_and_dry_mass_is_fixed(anchor, fix):
         MPASPrimitiveEquationConfig, MPASPrimitiveEquationModel)
     from legoesm.core.conservation import dry_surface_pressure
     from legoesm.grids.voronoi import create_voronoi_mesh
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
 
     mesh = create_voronoi_mesh(subdivision_level=1)
     sigma = create_sigma_coordinate(10, dtype=jnp.float64)

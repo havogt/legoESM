@@ -62,7 +62,7 @@ def _mesh_and_config():
 def _build_both(mesh, dev_config, moist):
     from legoesm.grids.vertical import create_sigma_coordinate
     from legoesm.parallel.mesh import shard_pytree
-    from tests.test_cases.baroclinic_wave import (
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import (
         baroclinic_wave_init_mpas,
         build_sharded_baroclinic_wave_state_mpas,
     )
@@ -137,7 +137,7 @@ def test_single_device_falls_back_to_global_builder(_mesh_and_config):
     """face_sharding=None (n_devices=1) must return the plain global state."""
     from legoesm.grids.vertical import create_sigma_coordinate
     from legoesm.parallel.mesh import create_voronoi_device_mesh
-    from tests.test_cases.baroclinic_wave import (
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import (
         baroclinic_wave_init_mpas,
         build_sharded_baroclinic_wave_state_mpas,
     )

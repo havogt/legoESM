@@ -46,7 +46,7 @@ def _build(devices: int, *, ballast: str, monkeypatch, wide: bool = False):
     )
     from legoesm.parallel.sharded_dynamics import make_voronoi_sharded_step
 
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
 
     monkeypatch.setenv("LEGOESM_MPAS_HALO_BALLAST", ballast)
     monkeypatch.setenv("LEGOESM_MPAS_WIDE_HALO", "1" if wide else "0")

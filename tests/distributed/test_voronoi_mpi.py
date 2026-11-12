@@ -34,7 +34,7 @@ from legoesm.parallel.voronoi_mpi import (
     scatter_state_voronoi,
 )
 
-from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
 
 
 def _skip_if_no_mpi():

@@ -48,7 +48,7 @@ def latlon(n_dev: int):
         CGridLatLonPrimitiveEquationConfig,
     )
     from legoesm.grids.vertical import create_sigma_coordinate
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_latlon
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_latlon
 
     nlev = 24  # divisible by 2,4,8
     grid = create_latlon_grid(n_lat=48, n_lon=96)
@@ -80,7 +80,7 @@ def mpas(n_dev: int):
     from legoesm.atmosphere.dynamics.gcm.primitive_eq_mpas import (
         MPASPrimitiveEquationModel, MPASPrimitiveEquationConfig,
     )
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
 
     nlev = 24
     vmesh = create_voronoi_mesh(subdivision_level=4)

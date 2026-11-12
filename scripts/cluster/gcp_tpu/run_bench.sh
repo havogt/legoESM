@@ -32,7 +32,7 @@ cd "$REPO_ROOT"
 # shellcheck disable=SC1091
 source "$VENV_DIR/bin/activate"
 
-# The bench driver imports tests.test_cases.baroclinic_wave (the shared IC),
+# The bench driver imports legoesm.atmosphere.forcing.idealized.baroclinic_wave (the shared IC),
 # so the repo root must be importable.  Without this every run silently
 # reports "FAILED: No module named 'tests'".
 export PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}"

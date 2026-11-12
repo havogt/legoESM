@@ -23,7 +23,7 @@ from legoesm.grids.gaussian import create_gaussian_grid, sh_synthesis, sh_synthe
 from legoesm.grids.vertical import create_sigma_coordinate
 from legoesm.thermo import saturation_mixing_ratio
 from legoesm.atmosphere.forcing.idealized.kessler_forcing import make_kessler_forcing_spectral
-from tests.test_cases.baroclinic_wave import baroclinic_wave_init_spectral
+from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_spectral
 
 _DT = 600.0
 

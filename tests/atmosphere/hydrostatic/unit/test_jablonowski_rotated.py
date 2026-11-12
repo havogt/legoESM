@@ -115,7 +115,7 @@ def test_spectral_init_finite(sigma8):
 def test_steady_alpha_zero_matches_jw(sigma8):
     """At α=0, the rotated steady IC should reduce to the existing
     Jablonowski-Williamson steady-state (within bisection tolerance)."""
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
 
     grid = create_cubed_sphere(8)
     rotated = rotated_steady_init(grid, sigma8, alpha=0.0)

@@ -63,7 +63,7 @@ def _fields(state):
 
 def _truth(devices: int, n_steps: int, dt: float):
     from legoesm.atmosphere.dynamics.gcm.primitive_eq_mpas import MPASPrimitiveEquationModel
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
     mesh, sigma, cfg = _setup(devices)
     model = MPASPrimitiveEquationModel(mesh, sigma, cfg)
     s = baroclinic_wave_init_mpas(mesh, sigma, perturbed=True)
@@ -76,7 +76,7 @@ def _sharded(devices: int, n_steps: int, dt: float, *, depth: int, passes: int,
              wide: bool, monkeypatch):
     from legoesm.atmosphere.dynamics.gcm.primitive_eq_mpas import MPASPrimitiveEquationModel
     from legoesm.parallel.mesh import create_voronoi_device_mesh, replicate_pytree
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
     monkeypatch.setenv("LEGOESM_MPAS_WIDE_HALO", "1" if wide else "0")
     monkeypatch.setattr(sd, "SPMD_HALO_DEPTH", depth)
     monkeypatch.setattr(sd, "_close_halo_under_cellsOnEdge",

@@ -81,7 +81,7 @@ class TestVoronoiShardedEquivalence:
         from legoesm.parallel.voronoi_partition import (
             reorder_voronoi_for_sharding,
         )
-        from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+        from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
 
         # Lower dt at higher subdivision to stay CFL-stable (dx scales
         # ~ 2^level so dt should scale 4× per level).

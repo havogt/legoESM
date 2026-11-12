@@ -3748,6 +3748,11 @@ class ModelDriver:
             self.state = held_suarez_init_mpas(
                 self.grid, self.sigma, T_init=cfg.T_init,
             )
+            if cfg.ic == "dcmip2016_baroclinic_wave":
+                from legoesm.atmosphere.forcing.idealized.baroclinic_wave import (
+                    baroclinic_wave_init_mpas)
+
+                self.state = baroclinic_wave_init_mpas(self.grid, self.sigma, perturbed=True)
             if jnp.any(self._phis_data != 0):
                 self.state = self.state._replace(
                     phis=self.state.phis.replace(data=self._phis_data),
@@ -3807,10 +3812,11 @@ class ModelDriver:
             # mismatched pressure grid -- the same ``pressure_at_full`` every
             # physics bridge and the driver now use (sigma-pressure ratchet:
             # tests/test_no_sigma_pressure_reimpl.py).
+            from legoesm.thermo import initial_water_vapour
+
             p_full_init = self.sigma.pressure_at_full(self.state.p_s.data)
-            q_sat_init = saturation_mixing_ratio(self.state.T.data, p_full_init)
-            self.tracers["q_v"] = cfg.rh_init * q_sat_init * self.sigma.sigma_full ** 2
-            self.tracers["q_v"] = jnp.minimum(self.tracers["q_v"], q_sat_init)
+            self.tracers["q_v"] = initial_water_vapour(
+                self.state.T.data, p_full_init, self.sigma.sigma_full, cfg.rh_init)
 
             # Fuse the two diagnostic means into one host transfer.
             _stats = jnp.stack([

@@ -79,7 +79,7 @@ def _run_column(mode):
         MPASPrimitiveEquationConfig,
         MPASPrimitiveEquationModel,
     )
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
 
     storage = resolve_dtype(None, "storage")
     accum = resolve_dtype(None, "accumulate")
@@ -110,7 +110,7 @@ def _run_latlon(mode):
         CGridLatLonPrimitiveEquationConfig,
         hydrostatic_to_cgrid,
     )
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_latlon
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_latlon
 
     storage = resolve_dtype(None, "storage")
     accum = resolve_dtype(None, "accumulate")

@@ -36,7 +36,7 @@ def global_setup():
     from legoesm.parallel.sharded_dynamics import (
         _build_rim_rings, _build_voronoi_partition_infra,
     )
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
 
     mesh = create_voronoi_mesh(subdivision_level=SUBDIV)
     if mesh.nCells % N_DEV or mesh.nEdges % N_DEV:

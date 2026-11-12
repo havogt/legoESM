@@ -518,7 +518,7 @@ def _build_cubedsphere(resolution, nlev, sigma, dt, dtype, rank, n_ranks,
         CDGridPrimitiveEquationConfig,
         hydrostatic_to_fv3,
     )
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
 
     grid = create_cubed_sphere(resolution)
     cdgrid = create_cubed_sphere_cdgrid(grid)
@@ -589,7 +589,7 @@ def _build_cubed_sphere_spmd(resolution, nlev, dt, dtype, physics_level,
     from legoesm.parallel.sharded_dynamics import make_sharded_step
     from legoesm.grids.cubed_sphere import create_cubed_sphere
     from legoesm.grids.vertical import create_sigma_coordinate
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
     from legoesm.atmosphere.dynamics.gcm.primitive_eq_cdgrid import (
         CDGridPrimitiveEquationModel,
         CDGridPrimitiveEquationConfig,
@@ -699,7 +699,7 @@ def _build_cubed_sphere_tiled_loop(resolution, nlev, dt, physics_level,
         hydrostatic_to_fv3,
         create_cubed_sphere_cdgrid,
     )
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init
 
     if physics_level not in ("none", "moist"):
         raise ValueError(
@@ -872,7 +872,7 @@ def _build_latlon(resolution, nlev, sigma, dt, dtype, rank, n_ranks,
     )
 
     # Baroclinic wave init for lat-lon (cell-centred HydrostaticState).
-    from tests.test_cases.baroclinic_wave import (
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import (
         baroclinic_wave_init_latlon,
     )
     _moist = physics_level == "moist"
@@ -999,7 +999,7 @@ def _build_icosahedral(resolution, nlev, sigma, dt, dtype, rank, n_ranks,
         MPASPrimitiveEquationModel,
         MPASPrimitiveEquationConfig,
     )
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_mpas
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_mpas
 
     # Build the SCVT mesh ONCE on rank 0 (which populates the disk cache),
     # barrier, then every other rank LOADS it (~0.02 s) instead of all ranks
@@ -1096,7 +1096,7 @@ def _build_spectral(resolution, nlev, sigma, dt, dtype, physics_level, cast_fn):
         SpectralPrimitiveEquationModel,
         SpectralPEConfig,
     )
-    from tests.test_cases.baroclinic_wave import baroclinic_wave_init_spectral
+    from legoesm.atmosphere.forcing.idealized.baroclinic_wave import baroclinic_wave_init_spectral
 
     grid = create_gaussian_grid(resolution)
     config = SpectralPEConfig(

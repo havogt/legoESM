@@ -28,3 +28,11 @@ def test_the_suite_is_the_production_decks_on_icon(tmp_path):
     assert cfg.physics_update_steps == 1 and cfg.rad_update_steps * cfg.dycore.dt == 3600.0
     assert cfg.dataset == "analytical" and not cfg.use_multilayer_land
     assert not cfg.distributed
+
+
+def test_both_lanes_start_from_the_same_state(tmp_path):
+    icon = icon_column_aquaplanet.build_config("grid.nc", tmp_path, 1, "icon")
+    mpas = icon_column_aquaplanet.build_config("grid.nc", tmp_path, 1, "mpas")
+    mpas.validate_strict()
+    for cfg in (icon, mpas):
+        assert (cfg.ic, cfg.rh_init, cfg.topography) == ("dcmip2016_baroclinic_wave", 0.7, "flat")

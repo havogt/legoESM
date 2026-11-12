@@ -174,7 +174,7 @@ def held_suarez_topo_init_spectral(
     construct the equivalent grid-space rest state with non-zero phis
     via lat-lon broadcasting and transform to spectral coefficients
     using the same convention as
-    :func:`tests.test_cases.baroclinic_wave.baroclinic_wave_init_spectral`.
+    :func:`legoesm.atmosphere.forcing.idealized.baroclinic_wave.baroclinic_wave_init_spectral`.
     """
     from legoesm.atmosphere.dynamics.gcm.spectral_pe import SpectralHydrostaticState
     from legoesm.grids.gaussian import sh_analysis, sh_analysis_3d

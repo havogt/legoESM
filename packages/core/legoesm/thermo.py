@@ -505,6 +505,18 @@ def _mixing_ratio_from_esat(e_sat: jax.Array, p: jax.Array) -> jax.Array:
     return 1.0 - jax.nn.softplus(20.0 * (1.0 - q_sat)) / 20.0
 
 
+def initial_water_vapour(
+    T: jax.Array,
+    p: jax.Array,
+    sigma: jax.Array,
+    rh: float,
+) -> jax.Array:
+    """The model's initial water vapour [kg/kg]: ``rh`` times the saturation mixing ratio,
+    tapered by ``sigma**2`` (``p / p_s``), and capped at saturation."""
+    q_sat = saturation_mixing_ratio(T, p)
+    return jnp.minimum(rh * q_sat * sigma**2, q_sat)
+
+
 def saturation_mixing_ratio_goff(
     T: jax.Array,
     p: jax.Array,
