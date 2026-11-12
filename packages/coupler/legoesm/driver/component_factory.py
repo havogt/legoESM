@@ -596,6 +596,7 @@ def _create_icon_column_model(config: ExperimentConfig, mesh):
         mesh=mesh,
         config=config,
         held_tracers=tuple(n for n in registry.names if n not in ICON_SPECIES),
+        conservative_tracer_clamp=config.dycore.mpas_conservative_tracer_clamp,
     )
 
 

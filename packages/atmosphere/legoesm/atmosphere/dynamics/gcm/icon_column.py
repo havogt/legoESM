@@ -60,7 +60,8 @@ class IconColumnModel:
     ``mesh`` the ICON
     ``ColumnMesh``, ``held_tracers`` the legoESM tracers beyond ICON's six."""
 
-    def __init__(self, *, grid_file, experiment_config, mesh, config, held_tracers=()):
+    def __init__(self, *, grid_file, experiment_config, mesh, config, held_tracers=(),
+                 conservative_tracer_clamp=True):
         from icon4py.model.driver import jax_api
 
         self._api = jax_api
@@ -68,6 +69,9 @@ class IconColumnModel:
         self.mesh = mesh
         self._state_type = IconColumnState
         self.held_tracers = tuple(held_tracers)
+        #: the other lanes' end-of-step positivity stage (apply_water_positivity): borrow the
+        #: negative water back within each column (True) or floor it (False)
+        self.conservative_tracer_clamp = bool(conservative_tracer_clamp)
         self._static, self._initial = jax_api.init_from_grid_file(
             pathlib.Path(grid_file), experiment_config
         )
@@ -205,6 +209,23 @@ class IconColumnModel:
             v=field(col.v, tend.dv_dt.data),
         )
 
+    def _positivity(self, col, held):
+        """The shared positivity stage on the post-physics columns, weighted by ICON's layer air
+        mass: the six water species borrowed within each column, the held tracers floored."""
+        import dataclasses
+
+        from legoesm.core.conservation import apply_water_positivity
+
+        tracers = {name: col.q[sp].ndarray for name, sp in ICON_SPECIES.items()}
+        tracers.update(held)
+        fixed, _ = apply_water_positivity(
+            tracers, None, col.air_mass.ndarray, conservative=self.conservative_tracer_clamp,
+            energy_consistent=False, area=self.mesh.areaCell)
+        q = dict(col.q)
+        for name, sp in ICON_SPECIES.items():
+            q[sp] = type(col.q[sp]).from_array(fixed[name], domain=col.q[sp].domain)
+        return dataclasses.replace(col, q=q), {name: fixed[name] for name in held}
+
     def step(self, state, dt, physics_fn=None, forcing=None, phys_state=None):
         """One ICON time step (``dt`` must be ICON's ``dtime``), the physics after the
         dynamics. Returns the new column state; stashes ``_phys_state``/``_sfc_diag`` like the
@@ -234,10 +255,11 @@ class IconColumnModel:
                 icon_tend = self.icon_tendencies(col, tend)
                 col = api.apply_column_tendencies(
                     col, icon_tend, static.dtime, recompute_virtual_temperature=False)
-                icon = api.phy2dyn(static, icon, col, icon_tend)
                 held = {name: v + static.dtime * tend.tracer_tendencies[name].data
                         if tend.tracer_tendencies and name in tend.tracer_tendencies else v
                         for name, v in held.items()}
+                col, held = self._positivity(col, held)
+                icon = api.phy2dyn(static, icon, col, icon_tend)
                 sfc = (getattr(tend, "sw_net_sfc", None), getattr(tend, "lw_net_sfc", None),
                        getattr(tend, "precip", None)) + tuple(
                     getattr(tend, k, None) for k in MPAS_SFC_DIAG_EXTRA_KEYS)

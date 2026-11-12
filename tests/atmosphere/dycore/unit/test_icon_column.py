@@ -80,6 +80,7 @@ def test_no_increment_is_icon_dynamics_and_the_column_round_trip(model):
             col, _physics()(model._view_of({"icon": icon, "held": held}, col), model.mesh, None))
         col = api.apply_column_tendencies(col, zero, static.dtime,
                                           recompute_virtual_temperature=False)
+        col, _ = model._positivity(col, held)
         return api.phy2dyn(static, icon, col, zero).prognostic, icon.prognostic
 
     ref, dyn = reference(model.initial_native()["icon"])
