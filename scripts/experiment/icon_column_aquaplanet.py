@@ -56,6 +56,9 @@ def build_config(grid_file, out, days: int):
         start_year=icon.start_year,
         start_day=icon.start_day,
         precision="fp64",
+        # run_amip turns MPI on under srun; the ICON column lane is one device so far
+        distributed=False,
+        ensemble_size=1,
         physics_update_steps=1,
         rad_update_steps=int(RADIATION_S / DT_S),
         dataset="analytical",
