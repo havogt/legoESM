@@ -8,8 +8,13 @@ The step is ``dynamics_step``, ``dyn2phy``, legoESM's physics on the column view
 coordinate handed to the physics is the columns' own pressures (:class:`ColumnPressures`).
 
 legoESM's physics heats at constant pressure; ICON's physics interface applies heating at
-constant volume (rho is held). The temperature tendency is therefore converted at equal energy:
-``dT_icon = dT * c_pd * air_mass / cv_air``. Tracers legoESM carries beyond ICON's six moisture
+constant volume. The temperature tendency is therefore converted at equal energy:
+``dT_icon = dT * c_pd * air_mass / cv_air``. The physics' water stays in the air's mass: each
+layer's density changes by the water the physics added or removed, with the dry air held
+(``rho' = rho * (1 + q_t - q_t_before)``, every tracer keeping its mass per volume), so the dry
+mass is conserved and the total follows the surface water exchange. ``phy2dyn`` then diagnoses
+exner and theta_v from the equation of state with ``rho'`` and the post-physics virtual
+temperature. Tracers legoESM carries beyond ICON's six moisture
 species (number concentrations) are held by the model and are not advected.
 """
 
@@ -42,10 +47,14 @@ class IconColumnState(NamedTuple):
     native: Any = None
 
 
+def _water_fraction(col):
+    """Each layer's total water [kg/kg]: the six species."""
+    return sum(col.q[sp].ndarray for sp in ICON_SPECIES.values())
+
+
 def _column_water(col):
     """Each column's water [kg/m2]: the six species weighted by ICON's layer air mass."""
-    q = sum(col.q[sp].ndarray for sp in ICON_SPECIES.values())
-    return jnp.sum(q * col.air_mass.ndarray, axis=-1)
+    return jnp.sum(_water_fraction(col) * col.air_mass.ndarray, axis=-1)
 
 
 def _rate(tend, key, like):
@@ -235,6 +244,19 @@ class IconColumnModel:
             q[sp] = type(col.q[sp]).from_array(fixed[name], domain=col.q[sp].domain)
         return dataclasses.replace(col, q=q), {name: fixed[name] for name in held}
 
+    def _hold_dry_mass(self, icon, col, held, water_before):
+        """``icon``'s density with the water the physics added since ``water_before`` (each
+        layer's total water fraction before it), the dry air held; the column's and the held
+        tracers rescaled to keep their mass per volume."""
+        import dataclasses
+
+        ratio = 1.0 + _water_fraction(col) - water_before
+        rho = icon.prognostic["rho"]
+        rho = type(rho).from_array(rho.ndarray * ratio, domain=rho.domain)
+        q = {sp: type(v).from_array(v.ndarray / ratio, domain=v.domain) for sp, v in col.q.items()}
+        return (dataclasses.replace(icon, prognostic={**icon.prognostic, "rho": rho}),
+                dataclasses.replace(col, q=q), {name: v / ratio for name, v in held.items()})
+
     def step(self, state, dt, physics_fn=None, forcing=None, phys_state=None):
         """One ICON time step (``dt`` must be ICON's ``dtime``), the physics after the
         dynamics. Returns the new column state; stashes ``_phys_state``/``_sfc_diag`` like the
@@ -263,6 +285,7 @@ class IconColumnModel:
                 tend, ps_out = (pr[0], pr[1]) if type(pr) is tuple else (pr, ps)
                 icon_tend = self.icon_tendencies(col, tend)
                 water_dyn = _column_water(col)
+                fraction_dyn = _water_fraction(col)
                 col = api.apply_column_tendencies(
                     col, icon_tend, static.dtime, recompute_virtual_temperature=False)
                 held = {name: v + static.dtime * tend.tracer_tendencies[name].data
@@ -271,6 +294,7 @@ class IconColumnModel:
                 water_phys = _column_water(col)
                 col, held = self._positivity(col, held)
                 water_pos = _column_water(col)
+                icon, col, held = self._hold_dry_mass(icon, col, held, fraction_dyn)
                 icon = api.phy2dyn(static, icon, col, icon_tend)
                 sfc = (getattr(tend, "sw_net_sfc", None), getattr(tend, "lw_net_sfc", None),
                        getattr(tend, "precip", None)) + tuple(
