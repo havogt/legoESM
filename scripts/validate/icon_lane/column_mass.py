@@ -25,6 +25,9 @@ def masses(snapshot) -> dict:
         a = area[:, 0]
         out["precip_kg"] = float((a * np.asarray(snapshot["acc_precip"], dtype=np.float64)).sum())
         out["evap_kg"] = float((a * np.asarray(snapshot["acc_evap"], dtype=np.float64)).sum())
+        for k in ("water_physics", "water_positivity"):
+            if f"acc_{k}" in snapshot:
+                out[f"{k}_kg"] = float((a * np.asarray(snapshot[f"acc_{k}"], np.float64)).sum())
     return out
 
 
@@ -46,7 +49,10 @@ def main(argv=None):
                 f"d_water {r['water_kg'] - base['water_kg']:+.6e} kg")
         if "precip_kg" in r:
             p_e = (r["precip_kg"] - base["precip_kg"]) - (r["evap_kg"] - base["evap_kg"])
-            line += f"  P-E {p_e:+.6e} kg"
+            line += f"  P-E {p_e:+.6e} kg  E-P since start {r['evap_kg'] - r['precip_kg']:+.6e} kg"
+        for k in ("water_physics", "water_positivity"):
+            if f"{k}_kg" in r:
+                line += f"  {k} since start {r[f'{k}_kg']:+.6e} kg"
         print(line)
     return rows
 

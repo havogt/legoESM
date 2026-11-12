@@ -134,6 +134,7 @@ def main(argv=None):
         # states, not only an exit: daily, and the last steps before a non-finite one
         driver.model.snapshot_dir = pathlib.Path(a.out) / "snapshots"
         driver.model.snapshot_every = int(86400 / DT_S)
+        driver.model.write_snapshot(driver.state.native, 0, "daily")
     status = driver.run()
     print("status", status)
     return status

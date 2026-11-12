@@ -42,6 +42,12 @@ class IconColumnState(NamedTuple):
     native: Any = None
 
 
+def _column_water(col):
+    """Each column's water [kg/m2]: the six species weighted by ICON's layer air mass."""
+    q = sum(col.q[sp].ndarray for sp in ICON_SPECIES.values())
+    return jnp.sum(q * col.air_mass.ndarray, axis=-1)
+
+
 def _rate(tend, key, like):
     """A surface water rate of the physics output [kg/m2/s], zero where it publishes none."""
     rate = getattr(tend, key, None)
@@ -102,7 +108,10 @@ class IconColumnModel:
         # evaporation up
         return {"icon": self._initial,
                 "held": {name: jnp.zeros((n, k)) for name in self.held_tracers},
-                "acc": {"precip": jnp.zeros((n,)), "evap": jnp.zeros((n,))}}
+                "acc": {"precip": jnp.zeros((n,)), "evap": jnp.zeros((n,)),
+                        # the column water [kg/m2] the physics added (ICON's layer air mass as
+                        # the weight) and the positivity stage added
+                        "water_physics": jnp.zeros((n,)), "water_positivity": jnp.zeros((n,))}}
 
     # ------------------------------------------------------------------
     # views
@@ -253,20 +262,23 @@ class IconColumnModel:
                 pr = physics_fn(view, self.mesh, pressures, phys_state=ps, forcing=fo)
                 tend, ps_out = (pr[0], pr[1]) if type(pr) is tuple else (pr, ps)
                 icon_tend = self.icon_tendencies(col, tend)
+                water_dyn = _column_water(col)
                 col = api.apply_column_tendencies(
                     col, icon_tend, static.dtime, recompute_virtual_temperature=False)
                 held = {name: v + static.dtime * tend.tracer_tendencies[name].data
                         if tend.tracer_tendencies and name in tend.tracer_tendencies else v
                         for name, v in held.items()}
+                water_phys = _column_water(col)
                 col, held = self._positivity(col, held)
+                water_pos = _column_water(col)
                 icon = api.phy2dyn(static, icon, col, icon_tend)
                 sfc = (getattr(tend, "sw_net_sfc", None), getattr(tend, "lw_net_sfc", None),
                        getattr(tend, "precip", None)) + tuple(
                     getattr(tend, k, None) for k in MPAS_SFC_DIAG_EXTRA_KEYS)
-                acc = {name: total + static.dtime * _rate(tend, key, total)
-                       for (name, key), total in zip(
-                           (("precip", "precip"), ("evap", "evap_sfc")), nat["acc"].values(),
-                           strict=True)}
+                acc = {name: nat["acc"][name] + static.dtime * _rate(tend, key, nat["acc"][name])
+                       for name, key in (("precip", "precip"), ("evap", "evap_sfc"))}
+                acc["water_physics"] = nat["acc"]["water_physics"] + water_phys - water_dyn
+                acc["water_positivity"] = nat["acc"]["water_positivity"] + water_pos - water_phys
                 new = {"icon": icon, "held": held, "acc": acc}
                 return (self._view(new), ps_out,
                         None if all(s is None for s in sfc) else sfc)
