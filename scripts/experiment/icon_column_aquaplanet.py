@@ -24,6 +24,22 @@ DT_S = 300.0
 RADIATION_S = 3600.0
 
 
+def amip_config(run_amip, deck):
+    """run_amip's ExperimentConfig for ``deck``, by run_amip.main's own sequence: the deck's
+    keys become the parser's defaults, then the land model and the sentinels resolve."""
+    from legoesm.driver.run_config_yaml import load_yaml_config
+
+    argv = ["--config", str(deck)]
+    parser = run_amip.build_arg_parser()
+    keys = load_yaml_config(str(deck), parser, example_keys="")
+    parser.set_defaults(**keys)
+    parser.set_defaults(_config_keys=frozenset(keys))
+    args = parser.parse_args(argv)
+    run_amip._resolve_land_model(args, parser, argv)
+    run_amip._postprocess_args(args, parser, argv)
+    return run_amip.build_config_from_args(args)
+
+
 def build_config(grid_file, out, days: int):
     """The S2 ExperimentConfig."""
     sys.path.insert(0, str(REPO / "scripts" / "run"))
@@ -32,11 +48,7 @@ def build_config(grid_file, out, days: int):
 
     from legoesm.config import Config
 
-    parser = run_amip.build_arg_parser()
-    argv = ["--config", str(PRODUCTION_DECK)]
-    args = parser.parse_args(argv)
-    run_amip._postprocess_args(args, parser, argv)
-    amip = run_amip.build_config_from_args(args)
+    amip = amip_config(run_amip, PRODUCTION_DECK)
 
     icon_deck = Config.from_yaml(str(ICON_DECK))
     icon_deck.set("grid.grid_file", str(grid_file))
