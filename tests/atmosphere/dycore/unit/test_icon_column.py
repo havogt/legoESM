@@ -92,8 +92,18 @@ def test_no_increment_is_icon_dynamics_and_the_column_round_trip(model):
     dyn = {k: np.asarray(v.ndarray) for k, v in dyn.items()}
     for name in ("exner", "theta_v"):
         drift = np.max(np.abs(got[name] - dyn[name]) / np.abs(dyn[name]))
-        print(f"{name}: equation-of-state drift of the column round trip {drift:.3e}")
+        print(f"{name}: drift of the column round trip against the dynamics {drift:.3e}")
         assert 0.0 < drift < 1e-7, name
+    # the drift is the equation of state re-diagnosed from the dynamics' rho and Tv: an
+    # independent NumPy diagnosis (icon4py's constants) reproduces the step's exner and theta_v
+    from icon4py.model.common import constants as c
+
+    virtual_temperature = dyn["theta_v"] * dyn["exner"]
+    exner = np.exp(c.RD_O_CPD * np.log(c.RD / c.P0REF * dyn["rho"] * virtual_temperature))
+    for name, expected in (("exner", exner), ("theta_v", virtual_temperature / exner)):
+        mismatch = np.max(np.abs(got[name] - expected) / np.abs(expected))
+        print(f"{name}: against its equation-of-state diagnosis {mismatch:.3e}")
+        assert mismatch < 1e-13, name
     for name in ("rho", "vn", "w"):
         np.testing.assert_allclose(got[name], dyn[name], rtol=1e-14, atol=1e-14, err_msg=name)
 
