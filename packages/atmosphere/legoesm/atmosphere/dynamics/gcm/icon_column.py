@@ -68,6 +68,12 @@ class IconColumnModel:
         self.dt = float(self._static.dtime)
         self._vertical_cfl_threshold = float(experiment_config.driver.vertical_cfl_threshold)
         self.steps_done = 0
+        #: state snapshots: ``snapshot_dir`` None = off; every ``snapshot_every`` steps, and on a
+        #: non-finite step the failing state and the last ``snapshot_ring`` finite ones
+        self.snapshot_dir = None
+        self.snapshot_every = 0
+        self.snapshot_ring = 12
+        self._ring = []
         self._phys_state = None
         self._sfc_diag = None
         self._last = None
@@ -135,6 +141,26 @@ class IconColumnModel:
                     f"IconColumnModel.step: state.{name} was edited outside the model; the "
                     "ICON column lane writes no edits back yet")
         return state.native
+
+    # ------------------------------------------------------------------
+    # snapshots
+    # ------------------------------------------------------------------
+
+    def write_snapshot(self, native, step, tag):
+        """All prognostics, the six species, air mass, T and the lowest half-level pressure of
+        ``native``, with the cell areas, to ``snapshot_dir``/``{tag}_step_{step:06d}.npz``."""
+        import numpy as np
+
+        col = self._api.dyn2phy(self._static, native["icon"])
+        fields = {f"prog_{k}": v.ndarray for k, v in native["icon"].prognostic.items()}
+        fields.update({f"q_{k}": v.ndarray for k, v in col.q.items()})
+        fields.update({f"held_{k}": v for k, v in native["held"].items()})
+        fields.update(air_mass=col.air_mass.ndarray, temperature=col.temperature.ndarray,
+                      p_surface=col.pressure_ifc.ndarray[:, -1], area=self.mesh.areaCell)
+        out = pathlib.Path(self.snapshot_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        np.savez(out / f"{tag}_step_{step:06d}.npz", step=step, dt=self.dt,
+                 **{k: np.asarray(v) for k, v in fields.items()})
 
     # ------------------------------------------------------------------
     # the step
@@ -213,11 +239,30 @@ class IconColumnModel:
             self._fns[physics_fn] = fn
         state_new, phys_out, sfc_diag = fn(native, forcing, phys_state)
         self.steps_done += 1
+        prognostic = {**state_new.native["icon"].prognostic, **state_new.native["icon"].tracers}
+        finite = jnp.stack([jnp.all(jnp.isfinite(getattr(v, "ndarray", v)))
+                            for v in prognostic.values()])
+        if not bool(jnp.all(finite)):
+            bad = [k for k, ok in zip(prognostic, list(finite), strict=True) if not bool(ok)]
+            if self.snapshot_dir is not None:
+                self.write_snapshot(state_new.native, self.steps_done, "nonfinite")
+                for step, kept in self._ring:
+                    self.write_snapshot(kept, step, "before_nonfinite")
+            raise FloatingPointError(
+                f"step {self.steps_done}: first non-finite fields {bad}")
+        if self.snapshot_dir is not None:
+            self._ring = (self._ring + [(self.steps_done, state_new.native)])[-self.snapshot_ring:]
+            if self.snapshot_every and self.steps_done % self.snapshot_every == 0:
+                self.write_snapshot(state_new.native, self.steps_done, "daily")
         cfl = state_new.native["icon"].carry["diagnostic"]["max_vertical_cfl"]
         cfl = float(getattr(cfl, "ndarray", cfl))
         if not cfl <= self._vertical_cfl_threshold:
             # the closed lane's guard: icon4py's driver would add dynamical substeps here, the
             # pure-step API runs a fixed number
+            if self.snapshot_dir is not None:
+                self.write_snapshot(state_new.native, self.steps_done, "cfl")
+                for step, kept in self._ring[:-1]:
+                    self.write_snapshot(kept, step, "before_cfl")
             raise RuntimeError(
                 f"step {self.steps_done}: maximum vertical CFL {cfl:.6g} exceeds "
                 f"vertical_cfl_threshold {self._vertical_cfl_threshold:g}")
