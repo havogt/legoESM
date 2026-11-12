@@ -589,9 +589,6 @@ def build_icon4py_experiment_config(cfg):
     if cfg.ic != "icon_jablonowski_williamson":
         raise ValueError(f"ic={cfg.ic!r}: the ICON lane has ic='icon_jablonowski_williamson' only")
     for block, (key, value) in _ICON_PHYSICS_FAMILIES.items():
-        if cfg.dycore.column_lane and block == "muphys":
-            # the column lane's muphys block only makes icon4py's column interface exist
-            continue
         selected = getattr(cfg, key) == value
         if selected != (getattr(icon, block) is not None):
             raise ValueError(
@@ -619,10 +616,13 @@ def build_icon4py_experiment_config(cfg):
         "driver.end_of_simulation": start + datetime.timedelta(seconds=round(n_steps) * dt),
         "driver.output_path": pathlib.Path(cfg.output.output_dir).resolve() / "icon4py",
         "driver.experiment_name": pathlib.Path(cfg.output.output_dir).name,
-        "diffusion.iforcing": "aes" if icon.muphys or icon.tmx or icon.surface else "no_forcing",
+        "diffusion.iforcing": (
+            "aes" if icon.muphys or icon.tmx or icon.surface or cfg.dycore.column_lane
+            else "no_forcing"
+        ),
     }
     for q in ("qv", "qc", "qi", "qr", "qs", "qg"):
-        legoesm_values[f"tracer_config.{q}"] = icon.muphys is not None
+        legoesm_values[f"tracer_config.{q}"] = icon.muphys is not None or cfg.dycore.column_lane
 
     def values(section: str, cls) -> dict:
         out = {}
@@ -681,5 +681,7 @@ def build_icon4py_experiment_config(cfg):
             "tmx": section("tmx", tmx_config.TmxConfig) if icon.tmx else None,
             "surface": section("surface", surface_config.SurfaceConfig) if icon.surface else None,
             "shared": _ICON_DEFAULT,
+            # the column lane's physics is legoESM's, through icon4py's column interface
+            "external_physics": bool(cfg.dycore.column_lane),
         },
     )

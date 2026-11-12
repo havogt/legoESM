@@ -49,8 +49,9 @@ def _field(data, name, units):
 class IconColumnModel:
     """icon4py's experiment on one rank, stepped under the column loop's contract.
 
-    ``experiment_config`` is icon4py's ``ExperimentConfig`` (with a physics group configured, so
-    its column interface exists; the column model never calls it), ``mesh`` the ICON
+    ``experiment_config`` is icon4py's ``ExperimentConfig`` (``external_physics`` on, or a physics
+    group configured, so its column interface exists; the model never calls icon4py's physics),
+    ``mesh`` the ICON
     ``ColumnMesh``, ``held_tracers`` the legoESM tracers beyond ICON's six."""
 
     def __init__(self, *, grid_file, experiment_config, mesh, config, held_tracers=()):

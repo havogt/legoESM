@@ -5183,13 +5183,7 @@ class ExperimentConfig(NamedTuple):
             errors.append(f"precision={self.precision!r}: the ICON lane runs fp64 only")
         if self.distributed or self.ensemble_size != 1:
             errors.append("the ICON column lane runs on one device so far")
-        # icon4py's column interface exists only with a physics group configured: muphys is
-        # given (and never called) until icon4py can build it without one; it also switches
-        # on ICON's six moisture tracers
-        if self.icon.muphys is None:
-            errors.append("icon.muphys is required on the ICON column lane (icon4py's column "
-                          "interface needs a physics group; the column lane never calls it)")
-        for block in ("tmx", "surface", "land", "radiation"):
+        for block in ("muphys", "tmx", "surface", "land", "radiation"):
             if getattr(self.icon, block) is not None:
                 errors.append(f"icon.{block}: the ICON column lane takes its physics from "
                               "legoESM, so the block must be null")

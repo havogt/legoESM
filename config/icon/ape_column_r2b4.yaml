@@ -1,6 +1,5 @@
 # legoESM ICON column lane: icon4py's dynamics under legoESM's column loop, APE_AES initial state,
-# every legoESM physics scheme off (stage S1). icon.muphys is a stopgap: icon4py's column interface
-# needs a physics group configured; the column lane never calls it. The grid file is machine-specific:
+# every legoESM physics scheme off (stage S1). The grid file is machine-specific:
 #   legoesm run config/icon/ape_column_r2b4.yaml --set grid.grid_file=<path to icon_grid_0013_R02B04_R.nc>
 model:
   name: ICON column lane, aquaplanet IC, legoESM physics off, R02B04
@@ -128,8 +127,7 @@ icon:
     horizontal_advection_limiter: positive_definite
     vertical_advection_type: third_order_ppm
     vertical_advection_limiter: semi_monotonic
-  muphys:
-    qnc_per_m3: 50000000.0
+  muphys: null
   tmx: null
   surface: null
   land: null
