@@ -22,14 +22,22 @@ PRODUCTION_DECK = REPO / "config" / "amip" / "amip_production.yaml"
 ICON_DECK = REPO / "config" / "icon" / "ape_column_r2b4.yaml"
 DT_S = 300.0
 RADIATION_S = 3600.0
+AQUAPLANET_FLAGS = (
+    "--dataset", "analytical", "--ic", "default", "--solar-source", "constant",
+    "--ozone-forcing", "inline", "--ghg-forcing", "constant", "--aerosol-forcing", "off",
+    "--no-aerosol-ccn", "--land-model", "none", "--land-ic", "",
+    # land settings are inert without land, but run_amip refuses a canopy without its tile
+    "--land-surface-scheme", "simple_seb",
+)
 
 
-def amip_config(run_amip, deck):
-    """run_amip's ExperimentConfig for ``deck``, by run_amip.main's own sequence: the deck's
-    keys become the parser's defaults, then the land model and the sentinels resolve."""
+def amip_config(run_amip, deck, cli=()):
+    """run_amip's ExperimentConfig for ``deck`` and command-line flags ``cli``, by run_amip.main's
+    own sequence: the deck's keys become the parser's defaults, the flags override them, then
+    the land model and the sentinels resolve."""
     from legoesm.driver.run_config_yaml import load_yaml_config
 
-    argv = ["--config", str(deck)]
+    argv = ["--config", str(deck), *cli]
     parser = run_amip.build_arg_parser()
     keys = load_yaml_config(str(deck), parser, example_keys="")
     parser.set_defaults(**keys)
@@ -48,7 +56,9 @@ def build_config(grid_file, out, days: int):
 
     from legoesm.config import Config
 
-    amip = amip_config(run_amip, PRODUCTION_DECK)
+    # the deck's production launcher passes the data paths on the command line; the aquaplanet
+    # takes the analytic SST/SIC instead and needs none of them
+    amip = amip_config(run_amip, PRODUCTION_DECK, cli=AQUAPLANET_FLAGS)
 
     icon_deck = Config.from_yaml(str(ICON_DECK))
     icon_deck.set("grid.grid_file", str(grid_file))
@@ -57,6 +67,9 @@ def build_config(grid_file, out, days: int):
     defaults = ExperimentConfig._field_defaults
     return amip._replace(
         **{k: defaults[k] for k in ExperimentConfig._fields if k.startswith("mpas_")},
+        # an aquaplanet has no land: the deck's land settings would be inert (and are refused)
+        **{k: defaults[k] for k in ExperimentConfig._fields
+           if k.startswith("land_") or k in ("ocean_flux_on_ocean_surface",)},
         grid=GridConfig(grid_type="icon", nlev=icon.grid.nlev, grid_file=str(grid_file)),
         dycore=DycoreConfig(
             model_type="nonhydrostatic", discretization="icon", dt=DT_S, icon_spmd=False,
