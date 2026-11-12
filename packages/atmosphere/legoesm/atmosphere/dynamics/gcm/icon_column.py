@@ -42,6 +42,12 @@ class IconColumnState(NamedTuple):
     native: Any = None
 
 
+def _rate(tend, key, like):
+    """A surface water rate of the physics output [kg/m2/s], zero where it publishes none."""
+    rate = getattr(tend, key, None)
+    return jnp.zeros_like(like) if rate is None else getattr(rate, "data", rate)
+
+
 def _field(data, name, units):
     return Field(data=data, name=name, dims=(), units=units)
 
@@ -88,8 +94,11 @@ class IconColumnModel:
     def initial_native(self):
         """icon4py's initial state and zero held tracers."""
         n, k = self.sigma_coord.p_full.shape
+        # the surface water the physics exchanged since the start [kg/m2]: precipitation down,
+        # evaporation up
         return {"icon": self._initial,
-                "held": {name: jnp.zeros((n, k)) for name in self.held_tracers}}
+                "held": {name: jnp.zeros((n, k)) for name in self.held_tracers},
+                "acc": {"precip": jnp.zeros((n,)), "evap": jnp.zeros((n,))}}
 
     # ------------------------------------------------------------------
     # views
@@ -155,6 +164,7 @@ class IconColumnModel:
         fields = {f"prog_{k}": v.ndarray for k, v in native["icon"].prognostic.items()}
         fields.update({f"q_{k}": v.ndarray for k, v in col.q.items()})
         fields.update({f"held_{k}": v for k, v in native["held"].items()})
+        fields.update({f"acc_{k}": v for k, v in native["acc"].items()})
         fields.update(air_mass=col.air_mass.ndarray, temperature=col.temperature.ndarray,
                       p_surface=col.pressure_ifc.ndarray[:, -1], area=self.mesh.areaCell)
         out = pathlib.Path(self.snapshot_dir)
@@ -215,9 +225,9 @@ class IconColumnModel:
                 col = api.dyn2phy(static, icon)
                 held = nat["held"]
                 if physics_fn is None:
-                    new = {"icon": icon, "held": held}
+                    new = {"icon": icon, "held": held, "acc": nat["acc"]}
                     return self._view_of(new, col), ps, None
-                view = self._view_of({"icon": icon, "held": held}, col)
+                view = self._view_of({"icon": icon, "held": held, "acc": nat["acc"]}, col)
                 pressures = ColumnPressures(col.pressure.ndarray, col.pressure_ifc.ndarray)
                 pr = physics_fn(view, self.mesh, pressures, phys_state=ps, forcing=fo)
                 tend, ps_out = (pr[0], pr[1]) if type(pr) is tuple else (pr, ps)
@@ -231,7 +241,11 @@ class IconColumnModel:
                 sfc = (getattr(tend, "sw_net_sfc", None), getattr(tend, "lw_net_sfc", None),
                        getattr(tend, "precip", None)) + tuple(
                     getattr(tend, k, None) for k in MPAS_SFC_DIAG_EXTRA_KEYS)
-                new = {"icon": icon, "held": held}
+                acc = {name: total + static.dtime * _rate(tend, key, total)
+                       for (name, key), total in zip(
+                           (("precip", "precip"), ("evap", "evap_sfc")), nat["acc"].values(),
+                           strict=True)}
+                new = {"icon": icon, "held": held, "acc": acc}
                 return (self._view(new), ps_out,
                         None if all(s is None for s in sfc) else sfc)
 

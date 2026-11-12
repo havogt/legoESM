@@ -19,8 +19,13 @@ def masses(snapshot) -> dict:
     area = np.asarray(snapshot["area"], dtype=np.float64)[:, None]
     air = area * np.asarray(snapshot["air_mass"], dtype=np.float64)
     water = sum(np.asarray(snapshot[f"q_{k}"], dtype=np.float64) for k in SPECIES)
-    return {"total_kg": float(air.sum()), "dry_kg": float((air * (1.0 - water)).sum()),
-            "water_kg": float((air * water).sum())}
+    out = {"total_kg": float(air.sum()), "dry_kg": float((air * (1.0 - water)).sum()),
+           "water_kg": float((air * water).sum())}
+    if "acc_precip" in snapshot:
+        a = area[:, 0]
+        out["precip_kg"] = float((a * np.asarray(snapshot["acc_precip"], dtype=np.float64)).sum())
+        out["evap_kg"] = float((a * np.asarray(snapshot["acc_evap"], dtype=np.float64)).sum())
+    return out
 
 
 def main(argv=None):
@@ -36,8 +41,13 @@ def main(argv=None):
     for r in rows:
         d_total = r["total_kg"] / base["total_kg"] - 1.0
         d_dry = r["dry_kg"] / base["dry_kg"] - 1.0
-        print(f"step {r['step']:6d}  total {r['total_kg']:.12e}  dry {r['dry_kg']:.12e}  "
-              f"water {r['water_kg']:.6e}  d_total/total {d_total:+.3e}  d_dry/dry {d_dry:+.3e}")
+        line = (f"step {r['step']:6d}  d_total/total {d_total:+.3e}  d_dry/dry {d_dry:+.3e}  "
+                f"d_dry {r['dry_kg'] - base['dry_kg']:+.6e} kg  "
+                f"d_water {r['water_kg'] - base['water_kg']:+.6e} kg")
+        if "precip_kg" in r:
+            p_e = (r["precip_kg"] - base["precip_kg"]) - (r["evap_kg"] - base["evap_kg"])
+            line += f"  P-E {p_e:+.6e} kg"
+        print(line)
     return rows
 
 
