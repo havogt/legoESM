@@ -16024,6 +16024,9 @@ class ModelDriver:
                 self.state = self.model.step(
                     self.state, DT, physics_fn=_pfn, forcing=_forcing,
                     phys_state=_phys_state)
+                if self.config.dycore.discretization == "icon":
+                    # the diagnostics integrate with this step's column pressures
+                    self.diagnostics.vcoord = self.model.sigma_coord
                 if _PHASE_TIMERS:
                     jax.block_until_ready(self.state.T.data)
                     _phase_t["model.step"] += time.perf_counter() - _pt0
