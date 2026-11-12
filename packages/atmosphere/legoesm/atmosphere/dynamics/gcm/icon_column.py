@@ -66,6 +66,8 @@ class IconColumnModel:
             pathlib.Path(grid_file), experiment_config
         )
         self.dt = float(self._static.dtime)
+        self._vertical_cfl_threshold = float(experiment_config.driver.vertical_cfl_threshold)
+        self.steps_done = 0
         self._phys_state = None
         self._sfc_diag = None
         self._last = None
@@ -210,6 +212,15 @@ class IconColumnModel:
             fn = jax.jit(_step)
             self._fns[physics_fn] = fn
         state_new, phys_out, sfc_diag = fn(native, forcing, phys_state)
+        self.steps_done += 1
+        cfl = state_new.native["icon"].carry["diagnostic"]["max_vertical_cfl"]
+        cfl = float(getattr(cfl, "ndarray", cfl))
+        if not cfl <= self._vertical_cfl_threshold:
+            # the closed lane's guard: icon4py's driver would add dynamical substeps here, the
+            # pure-step API runs a fixed number
+            raise RuntimeError(
+                f"step {self.steps_done}: maximum vertical CFL {cfl:.6g} exceeds "
+                f"vertical_cfl_threshold {self._vertical_cfl_threshold:g}")
         self._last = state_new
         col_new = self._api.dyn2phy(self._static, state_new.native["icon"])
         self.sigma_coord = ColumnPressures(col_new.pressure.ndarray, col_new.pressure_ifc.ndarray)
