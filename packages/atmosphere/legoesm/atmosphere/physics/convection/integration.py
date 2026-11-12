@@ -45,6 +45,14 @@ def _refuse_aquaplanet_land(lf):
             "the grid's land fraction has land; select 'required'.")
 
 
+def _reference_edges(sigma_coord, dtype):
+    """The coordinate's reference interface pressures (at ``p_s = p_ref``), or None where the
+    coordinate has none: per-column pressures (a non-sigma dycore), for which ZM takes its
+    convection-top limit from each column's own interfaces."""
+    edges = sigma_coord.pressure_at_half(jnp.asarray(constants.p_ref, dtype=dtype))
+    return edges if edges.ndim == 1 else None
+
+
 def land_fraction_for_columns(grid, ncol, scheme_config=None):
     """The per-column land fraction a convection leaf needs, or None.
 
@@ -970,8 +978,7 @@ def _make_hydrostatic_convection(
                         land_frac=land_fraction_for_columns(grid, ncol, scheme_config),
                         cld_frac=None if _cf is None else _cf.reshape(ncol, nlev),
                         pblh=None if _pblh is None else _pblh.reshape(ncol),
-                        pref_edge=sigma_coord.pressure_at_half(
-                            jnp.asarray(constants.p_ref, dtype=T_col.dtype)),
+                        pref_edge=_reference_edges(sigma_coord, T_col.dtype),
                         tracers=_convtran1_columns(state.tracers, ncol, nlev),
                     )
                 conv_prog_out = prog_new_profile
@@ -2076,8 +2083,7 @@ def _make_spectral_pe_convection(
                         land_frac=land_fraction_for_columns(grid, ncol, scheme_config),
                         cld_frac=None if _cf is None else _cf.reshape(ncol, nlev),
                         pblh=None if _pblh is None else _pblh.reshape(ncol),
-                        pref_edge=sigma_coord.pressure_at_half(
-                            jnp.asarray(constants.p_ref, dtype=T_col.dtype)),
+                        pref_edge=_reference_edges(sigma_coord, T_col.dtype),
                         tracers=_convtran1_columns(state.tracers, ncol, nlev),
                     )
                 conv_prog_out = prog_new_profile
