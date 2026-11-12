@@ -72,6 +72,10 @@ class IconColumnModel:
         col = jax_api.dyn2phy(self._static, self._initial)
         self.sigma_coord = ColumnPressures(col.pressure.ndarray, col.pressure_ifc.ndarray)
 
+    def init_state(self, driver) -> None:
+        """Fresh IC: icon4py's own (the experiment's analytic initial state)."""
+        driver.state = self.from_bundle(self.initial_native())
+
     def initial_native(self):
         """icon4py's initial state and zero held tracers."""
         n, k = self.sigma_coord.p_full.shape

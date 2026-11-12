@@ -34,3 +34,13 @@ def test_it_has_no_sigma_attributes_and_is_a_pytree():
             getattr(cp, name)
     doubled = jax.jit(lambda c: jax.tree.map(lambda x: 2.0 * x, c))(cp)
     assert isinstance(doubled, ColumnPressures) and float(doubled.p_half[0, 0]) == 2.0
+
+
+def test_the_stand_in_sizes_setup_code_and_refuses_pressures():
+    from legoesm.grids.column_pressures import NoSigmaCoordinate
+
+    c = NoSigmaCoordinate(5)
+    assert c.sigma_full.shape == (5,) and c.sigma_half.shape == (6,)
+    assert np.isnan(np.asarray(c.dsigma)).all()
+    with pytest.raises(ValueError, match="no sigma coordinate"):
+        c.pressure_at_full(jnp.ones(3))

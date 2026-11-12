@@ -75,6 +75,8 @@ _ATMOSPHERE_KEYS: frozenset[str] = frozenset({
     # ICON lane (dycore.discretization="icon"): required there, no default here.
     "icon_spmd",
     "icon_finite_halo_padding",
+    "column_lane",
+    "energy_fixer",
 })
 
 # Keys this dialect used to DECLARE while wiring them to nothing.  They are
@@ -493,6 +495,8 @@ class Config:
             ((grid, "grid_file"), ("grid", "grid_file")),
             ((atm, "icon_spmd"), ("dycore", "icon_spmd")),
             ((atm, "icon_finite_halo_padding"), ("dycore", "icon_finite_halo_padding")),
+            ((atm, "column_lane"), ("dycore", "column_lane")),
+            ((atm, "energy_fixer"), ("dycore", "energy_fixer")),
             ((d, "ic"), (None, "ic")),
             ((d, "topography"), (None, "topography")),
             ((time_cfg, "start_year"), (None, "start_year")),

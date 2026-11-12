@@ -2242,11 +2242,15 @@ class ExperimentConfig(NamedTuple):
         g = self.grid
         d = self.dycore
         if d.discretization == "icon" or g.grid_type == "icon" or self.icon is not None:
-            icon_errors = self._icon_lane_errors()
+            if d.column_lane:
+                icon_errors = self._icon_column_lane_errors()
+            else:
+                icon_errors = self._icon_lane_errors()
             if icon_errors:
                 raise ValueError(
                     "Invalid ExperimentConfig (ICON lane):\n  " + "\n  ".join(icon_errors))
-            return
+            if not d.column_lane:
+                return
         errors: list[str] = []
         # The faithful IFS convection hands its detrained rain and snow
         # (PSNDE) to the host's rain and snow species (user 2026-10-28, R12):
@@ -2456,11 +2460,11 @@ class ExperimentConfig(NamedTuple):
                           f"got {d.corner_fill!r}")
         if d.column_lane:
             _native_grid = {"latlon_cgrid": "latlon", "spectral": "gaussian"}
-            if d.discretization not in ("fv3_duo", *_native_grid):
+            if d.discretization not in ("fv3_duo", "icon", *_native_grid):
                 errors.append(
                     "dycore.column_lane: no column adapter for "
                     f"dycore.discretization={d.discretization!r} "
-                    "(fv3_duo, latlon_cgrid, spectral)")
+                    "(fv3_duo, icon, latlon_cgrid, spectral)")
             if d.discretization in _native_grid:
                 _ng = _native_grid[d.discretization]
                 if (g.grid_type != _ng or d.model_type != "hydrostatic"):
@@ -4966,6 +4970,9 @@ class ExperimentConfig(NamedTuple):
                 f"got {self.output.checkpoint_format!r}"
             )
         _valid_ic = ("default", "standard", "era5")
+        if d.discretization == "icon":
+            # the ICON column lane; its own checks ran in _icon_column_lane_errors
+            _valid_ic = ("icon_jablonowski_williamson",)
         if self.ic not in _valid_ic:
             errors.append(f"ic must be one of {_valid_ic}, got {self.ic!r}")
         if self.ic == "era5" and not self.ic_path:
@@ -5154,6 +5161,62 @@ class ExperimentConfig(NamedTuple):
             errors.append("output.output_dir is required on the ICON lane")
         if o.checkpoint_days:
             errors.append("output.checkpoint_days: the ICON lane writes no checkpoints yet")
+        return errors
+
+    def _icon_column_lane_errors(self) -> list[str]:
+        """The ICON column lane: icon4py's dynamics, legoESM's column physics. Its own
+        settings here; the generic column-lane checks follow in validate_strict."""
+        d, g = self.dycore, self.grid
+        errors = []
+        if (d.discretization, g.grid_type, d.model_type) != ("icon", "icon", "nonhydrostatic"):
+            errors.append("the ICON column lane needs discretization='icon', grid_type='icon' "
+                          "and model_type='nonhydrostatic'")
+        if self.icon is None:
+            errors.append("ExperimentConfig.icon is required on the ICON lane")
+            return errors
+        if not g.grid_file:
+            errors.append("grid.grid_file is required on the ICON lane")
+        for name in ("icon_spmd", "icon_finite_halo_padding"):
+            if not isinstance(getattr(d, name), bool):
+                errors.append(f"dycore.{name} must be set explicitly (true or false)")
+        if self.precision != "fp64":
+            errors.append(f"precision={self.precision!r}: the ICON lane runs fp64 only")
+        if self.distributed or self.ensemble_size != 1:
+            errors.append("the ICON column lane runs on one device so far")
+        # icon4py's column interface exists only with a physics group configured: muphys is
+        # given (and never called) until icon4py can build it without one; it also switches
+        # on ICON's six moisture tracers
+        if self.icon.muphys is None:
+            errors.append("icon.muphys is required on the ICON column lane (icon4py's column "
+                          "interface needs a physics group; the column lane never calls it)")
+        for block in ("tmx", "surface", "land", "radiation"):
+            if getattr(self.icon, block) is not None:
+                errors.append(f"icon.{block}: the ICON column lane takes its physics from "
+                              "legoESM, so the block must be null")
+        for key in ("microphysics", "turbulence", "surface_bulk_scheme", "radiation"):
+            if str(getattr(self, key)).startswith("icon_"):
+                errors.append(f"{key}={getattr(self, key)!r}: an ICON family; the ICON column "
+                              "lane runs legoESM's schemes")
+        if self.physics_update_steps != 1:
+            errors.append(f"physics_update_steps={self.physics_update_steps!r}: the ICON column "
+                          "lane applies the physics once per ICON time step (1)")
+        if self.ic != "icon_jablonowski_williamson":
+            errors.append(f"ic={self.ic!r}: the ICON lane has 'icon_jablonowski_williamson'")
+        if self.topography != "flat":
+            errors.append(f"topography={self.topography!r}: the ICON column lane is flat so far")
+        if d.dt != int(d.dt):
+            errors.append(f"dycore.dt={d.dt!r}: the ICON lane needs a whole number of seconds")
+        elif (self.days * 86400.0) % d.dt:
+            errors.append(f"days={self.days!r} is not a whole number of {d.dt:g} s steps")
+        if self.output.checkpoint_days:
+            errors.append("output.checkpoint_days: the ICON lane writes no checkpoints yet")
+        if self.output.budget_ledger:
+            errors.append("output.budget_ledger: the ICON dycore publishes no per-step ledger")
+        if self.output.cmip_output:
+            errors.append("output.cmip_output: no CMOR output on the ICON column lane yet")
+        if self.held_suarez_forcing:
+            errors.append("held_suarez_forcing: legoESM's Held-Suarez forcing is on sigma "
+                          "levels; not on the ICON column lane")
         return errors
 
     def _icon_radiation_errors(self) -> list[str]:

@@ -582,6 +582,23 @@ def create_icon_model(config: ExperimentConfig):
     )
 
 
+def _create_icon_column_model(config: ExperimentConfig, mesh):
+    """icon4py's dynamics under legoESM's column loop (the ICON column lane): one rank,
+    legoESM's tracers beyond ICON's six held by the model."""
+    from legoesm.atmosphere.dynamics.gcm import icon4py_jax
+    from legoesm.atmosphere.dynamics.gcm.icon_column import ICON_SPECIES, IconColumnModel
+    from legoesm.driver.physics_pipeline import moisture_registry_for, registry_scheme_config
+
+    registry = moisture_registry_for(config.microphysics, registry_scheme_config(config))
+    return IconColumnModel(
+        grid_file=config.grid.grid_file,
+        experiment_config=icon4py_jax.build_icon4py_experiment_config(config),
+        mesh=mesh,
+        config=config,
+        held_tracers=tuple(n for n in registry.names if n not in ICON_SPECIES),
+    )
+
+
 def _icon_mesh(config: ExperimentConfig):
     from legoesm.grids.factory import create_grid
 
@@ -1349,6 +1366,8 @@ def create_atmosphere_dycore(
         )
         return MPASCompressibleEulerModel(grid, height_coord, terrain_metric, nh_cfg)
 
+    if solver_name == "icon_nonhydrostatic" and config.dycore.column_lane:
+        return _create_icon_column_model(config, grid)
     if solver_name == "icon_nonhydrostatic":
         return create_icon_model(config)
 

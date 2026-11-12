@@ -1921,7 +1921,7 @@ class ModelDriver:
         self.tracers: dict[str, jax.Array] = {}
         # the ICON lane's tracers are icon4py's own; legoESM's registry stays empty there
         _registry_scheme = ("none" if config.dycore.discretization == "icon"
-                            else config.microphysics)
+                            and not config.dycore.column_lane else config.microphysics)
         self.tracer_registry: TracerRegistry = moisture_registry_for(
             _registry_scheme, registry_scheme_config(config))
         validate_microphysics_tracer_slots(
@@ -2731,7 +2731,7 @@ class ModelDriver:
         self._reject_shallow_water_unrunnable()
         # Strict validation — abort early on invalid parameters
         self.config.validate_strict()
-        if self.config.dycore.discretization == "icon":
+        if self.config.dycore.discretization == "icon" and not self.config.dycore.column_lane:
             self._setup_icon()
             return
         # Bootstrap runtime: precision, backend, devices, and (optionally) MPI.
@@ -2959,6 +2959,8 @@ class ModelDriver:
             self._fv3_duo_bundle = create_fv3_duo_grid(gc.resolution)
             bnd = self._fv3_duo_bundle
             self.grid = build_duo_column_mesh(bnd.ctx_np, bnd.n, bnd.ng)
+        elif gc.grid_type == "icon":
+            self.grid = create_grid("icon", grid_file=gc.grid_file)
         else:
             # cubed_sphere / gaussian / mpas.  mpas keeps the driver's
             # 50-iteration Lloyd relaxation default; unknown grid types raise
@@ -3477,7 +3479,8 @@ class ModelDriver:
             "nonhydrostatic": "compressible",
         }
         cfl_model = model_type_map.get(dc.model_type, "primitive_eq")
-        dt_safe = cfl_check_and_adjust(
+        # ICON's time step is its own (dtime with its fixed dynamical substeps): never adjusted
+        dt_safe = dc.dt if gc.grid_type == "icon" else cfl_check_and_adjust(
             dc.dt, gc.resolution, model_type=cfl_model,
             radius=getattr(self.grid, 'radius', constants.R_earth),
             grid_type=gc.grid_type,
@@ -4118,8 +4121,14 @@ class ModelDriver:
 
     def _create_physics(self) -> None:
         """Build the physics pipeline."""
+        sigma = self.sigma
+        if self.config.dycore.discretization == "icon":
+            # the column loop's physics takes each step's column pressures; the pipeline's
+            # own pressure methods must not run on this lane
+            from legoesm.grids.column_pressures import NoSigmaCoordinate
+            sigma = NoSigmaCoordinate(self.sigma.n_levels)
         self.physics = build_physics_pipeline(
-            self.grid, self.sigma, self.config,
+            self.grid, sigma, self.config,
             spacing_grid=self._coeff_grid())
         rad_str = self.config.radiation or "none"
         conv_str = self.config.convection or "none"
@@ -5603,11 +5612,17 @@ class ModelDriver:
                 cam6_rhminis=getattr(self.config, "cloud_cam6_rhminis", None),
                 cam6_rhmaxis=getattr(self.config, "cloud_cam6_rhmaxis", None),
             )
+        diag_sigma = self.sigma
+        if self.config.dycore.discretization == "icon":
+            # no pressure-level diagnostics on the ICON column lane yet (they would need each
+            # step's column pressures): sized from the stand-in, its pressures refuse
+            from legoesm.grids.column_pressures import NoSigmaCoordinate
+            diag_sigma = NoSigmaCoordinate(self.sigma.n_levels)
         self.diagnostics = DiagnosticCollector(
             nlev=self.config.grid.nlev,
-            sigma_full=self.sigma.sigma_full,
-            vcoord=self.sigma,
-            dsigma=self.sigma.dsigma,
+            sigma_full=diag_sigma.sigma_full,
+            vcoord=diag_sigma,
+            dsigma=diag_sigma.dsigma,
             experiment_id=self.config.experiment or "amip",
             monthly_means=self.config.output.monthly_means,
             cmip_output=self.config.output.cmip_output,
@@ -5920,6 +5935,9 @@ class ModelDriver:
     def _create_friction(self) -> None:
         """Precompute Rayleigh friction decay factors."""
         cfg = self.config
+        if cfg.dycore.discretization == "icon":
+            # ICON damps and diffuses in its own dycore; the column loop reads none of these
+            return
         DT = cfg.dycore.dt
         sigma_full = self.sigma.sigma_full
 
@@ -9954,7 +9972,7 @@ class ModelDriver:
         str
             Run status ("COMPLETED" or "BLOWUP at day ...").
         """
-        if self.config.dycore.discretization == "icon":
+        if self.config.dycore.discretization == "icon" and not self.config.dycore.column_lane:
             return self._run_icon(start_step, start_day)
         if self._mpas_step_exported:
             raise RuntimeError(
@@ -16442,10 +16460,14 @@ class ModelDriver:
                     from legoesm.diagnostics.column_integrals import (
                         column_water_vapor,
                     )
+                    # the model's coordinate is the current step's (per-column pressures on
+                    # the ICON lane, the same static coordinate on the others)
+                    _vc = (self._column_model().sigma_coord
+                           if self._column_model() is not None else self.sigma)
                     _cwv_field = column_water_vapor(
                         self.state.tracers["q_v"].data, p_s_data,
-                        self.sigma.dsigma,
-                        dp=self.sigma.layer_thickness_dp(p_s_data))
+                        getattr(_vc, "dsigma", None),
+                        dp=_vc.layer_thickness_dp(p_s_data))
 
                 _ni_max_mpi = float("nan")
                 if self._voronoi_layout is not None:

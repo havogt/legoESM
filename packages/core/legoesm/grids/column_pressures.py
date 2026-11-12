@@ -33,3 +33,35 @@ class ColumnPressures(NamedTuple):
     def layer_thickness_dp(self, p_s=None):
         del p_s
         return self.p_half[..., 1:] - self.p_half[..., :-1]
+
+
+class NoSigmaCoordinate(NamedTuple):
+    """For setup code that sizes itself from a sigma coordinate on a lane that has none: the
+    sigma arrays are NaN of the right length (any arithmetic on them shows), and the pressure
+    methods raise. The lane's physics gets the columns' pressures per step instead."""
+
+    n_levels: int
+
+    @property
+    def sigma_full(self):
+        import jax.numpy as jnp
+
+        return jnp.full((self.n_levels,), jnp.nan)
+
+    @property
+    def sigma_half(self):
+        import jax.numpy as jnp
+
+        return jnp.full((self.n_levels + 1,), jnp.nan)
+
+    @property
+    def dsigma(self):
+        import jax.numpy as jnp
+
+        return jnp.full((self.n_levels,), jnp.nan)
+
+    def _refuse(self, *_):
+        raise ValueError("this lane has no sigma coordinate: its physics takes each step's "
+                         "column pressures (ColumnPressures)")
+
+    pressure_at_full = pressure_at_half = layer_thickness_dp = _refuse

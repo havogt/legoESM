@@ -589,6 +589,9 @@ def build_icon4py_experiment_config(cfg):
     if cfg.ic != "icon_jablonowski_williamson":
         raise ValueError(f"ic={cfg.ic!r}: the ICON lane has ic='icon_jablonowski_williamson' only")
     for block, (key, value) in _ICON_PHYSICS_FAMILIES.items():
+        if cfg.dycore.column_lane and block == "muphys":
+            # the column lane's muphys block only makes icon4py's column interface exist
+            continue
         selected = getattr(cfg, key) == value
         if selected != (getattr(icon, block) is not None):
             raise ValueError(
